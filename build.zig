@@ -7,6 +7,8 @@ pub fn build(b: *std.Build) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
+    const linkage = b.option(std.builtin.LinkMode, "linkage", "Static or dynamic linkage") orelse .static;
+    const CFlags = &[_][]const u8{"-fPIC"};
 
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
@@ -14,22 +16,39 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const lib_compress = b.createModule(.{
+    // Compress
+    const compress_mod = b.createModule(.{
         .root_source_file = b.path("src/compress.zig"),
         .target = target,
         .optimize = optimize,
     });
-
-    // This is what allows Zig source code to use `@import("compress")`
-    exe_mod.addImport("compress", lib_compress);
-
+    exe_mod.addImport("compress", compress_mod);
     // Create a static library
-    const lib = b.addLibrary(.{
+    const compress_lib = b.addLibrary(.{
         .linkage = .static,
-        .name = "asconv",
-        .root_module = lib_compress,
+        .name = "compress",
+        .root_module = compress_mod,
     });
-    b.installArtifact(lib);
+    b.installArtifact(compress_lib);
+
+    // Stb_image
+    const stb_mod = b.addModule("stb_image", .{
+        .root_source_file = b.path("src/stb_image.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    stb_mod.addIncludePath(b.path("lib"));
+    stb_mod.addCSourceFile(.{ .file = b.path("lib/stb_image.c"), .flags = CFlags });
+    exe_mod.addImport("stb_image", stb_mod);
+    compress_mod.addImport("stb_image", stb_mod);
+    const stb_lib = b.addLibrary(.{
+        .name = "stb-image",
+        .root_module = stb_mod,
+        .linkage = linkage,
+    });
+    stb_lib.installHeadersDirectory(b.path("lib"), "", .{});
+    b.installArtifact(stb_lib);
 
     // Build executable
     const exe = b.addExecutable(.{
