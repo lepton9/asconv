@@ -16,6 +16,20 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // Cli
+    const cli_mod = b.createModule(.{
+        .root_source_file = b.path("src/cli.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe_mod.addImport("cli", cli_mod);
+    const cli_lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = "cli",
+        .root_module = cli_mod,
+    });
+    b.installArtifact(cli_lib);
+
     // Cmd
     const cmd_mod = b.createModule(.{
         .root_source_file = b.path("src/cmd.zig"),
@@ -23,6 +37,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exe_mod.addImport("cmd", cmd_mod);
+    cli_mod.addImport("cmd", cmd_mod);
     const cmd_lib = b.addLibrary(.{
         .linkage = .static,
         .name = "cmd",
@@ -37,6 +52,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     cmd_mod.addImport("arg", arg_mod);
+    cli_mod.addImport("arg", arg_mod);
     exe_mod.addImport("arg", arg_mod);
     const arg_lib = b.addLibrary(.{
         .linkage = .static,
