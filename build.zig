@@ -16,6 +16,35 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // Cmd
+    const cmd_mod = b.createModule(.{
+        .root_source_file = b.path("src/cmd.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe_mod.addImport("cmd", cmd_mod);
+    const cmd_lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = "cmd",
+        .root_module = cmd_mod,
+    });
+    b.installArtifact(cmd_lib);
+
+    // Arg
+    const arg_mod = b.createModule(.{
+        .root_source_file = b.path("src/arg.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    cmd_mod.addImport("arg", arg_mod);
+    exe_mod.addImport("arg", arg_mod);
+    const arg_lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = "arg",
+        .root_module = arg_mod,
+    });
+    b.installArtifact(arg_lib);
+
     // Compress
     const compress_mod = b.createModule(.{
         .root_source_file = b.path("src/compress.zig"),
