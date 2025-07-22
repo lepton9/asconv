@@ -1,3 +1,7 @@
+pub const ResultError = error{
+    UnwrapError,
+};
+
 pub fn Result(comptime T: type, comptime E: type) type {
     return union(enum) {
         Ok: T,
@@ -5,6 +9,13 @@ pub fn Result(comptime T: type, comptime E: type) type {
 
         pub fn is_ok(self: @This()) bool {
             return self == @This().Ok;
+        }
+
+        pub fn unwrap_try(self: @This()) !T {
+            return switch (self) {
+                .Ok => |v| v,
+                .Err => |_| return ResultError.UnwrapError,
+            };
         }
 
         pub fn unwrap(self: @This()) T {
