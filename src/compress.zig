@@ -47,44 +47,55 @@ pub const Image = struct {
     }
 
     pub fn fit_image(self: *Image) void {
-        const h: u32, const w: u32 = calc_chunk_size(
-            @intCast(self.raw_image.height),
-            @intCast(self.raw_image.width),
-            self.height,
-            self.widht,
-        );
+        const chunk_h: u32 = @as(u32, @intCast(self.raw_image.height)) / self.height;
+        const chunk_w: u32 = @as(u32, @intCast(self.raw_image.width)) / self.widht;
         if (self.raw_image.data == null) return;
         const pixels = convert_to_pixel_matrix(&std.heap.page_allocator, self.raw_image) catch return;
-        for (self.pixels, 0..) |row, r_i| {
-            for (row, 0..) |*pixel, c_i| {
-                pixel.* = comp_chunk(pixels, @intCast(r_i), @intCast(c_i), h, w);
+        for (0..self.height) |r_i| {
+            for (0..self.widht) |c_i| {
+                self.pixels[r_i][c_i] = comp_chunk(pixels, r_i * chunk_h, c_i * chunk_w, chunk_h, chunk_w);
             }
         }
     }
 };
 
-pub fn intensity(pixel: u32) u8 {
-    return @truncate((0x000000FF & pixel));
-}
+pub fn r(pixel: u32) u8 {
     return @truncate((0xFF000000 & pixel) >> 8 * 3);
 }
 
-pub fn r(pixel: u32) u8 {
+pub fn g(pixel: u32) u8 {
     return @truncate((0x00FF0000 & pixel) >> 8 * 2);
 }
 
-pub fn g(pixel: u32) u8 {
+pub fn b(pixel: u32) u8 {
     return @truncate((0x0000FF00 & pixel) >> 8 * 1);
 }
 
-pub fn b(pixel: u32) u8 {
+pub fn a(pixel: u32) u8 {
     return @truncate((0x000000FF & pixel) >> 8 * 0);
+}
+
+pub fn pixel_avg(pixel: u32) u8 {
+    const r_value = r(pixel);
+    const g_value = g(pixel);
+    const b_value = b(pixel);
+    return @truncate((@as(u16, r_value) + @as(u16, g_value) + @as(u16, b_value)) / 3);
+}
+
+pub fn gray_scale(pixel: u32) u8 {
+    const r_val: f32 = @floatFromInt(r(pixel));
+    const g_val: f32 = @floatFromInt(g(pixel));
+    const b_val: f32 = @floatFromInt(b(pixel));
+    const val: f32 = 0.21 * r_val + 0.72 * g_val + 0.07 * b_val;
+    return @intFromFloat(val);
 }
 
 pub fn pixel_to_char(pixel: u32) u8 {
     const n: u16 = 10;
-    const table = " .,:;ox%#@";
-    const index = (intensity(pixel) * n) / 255;
+    const table = "@#%xo;:,. ";
+    // const table = " .,:;ox%#@";
+    // const index = (pixel_avg(pixel) * n) / 255;
+    const index = (gray_scale(pixel) * n) / 255;
     return table[index];
 }
 
@@ -121,11 +132,15 @@ pub fn calc_chunk_size(h: u32, w: u32, h_new: u32, w_new: u32) struct { u32, u32
     return .{ h / h_new, w / w_new };
 }
 
-pub fn comp_chunk(mat: [][]u32, row: u32, col: u32, h: u32, w: u32) u32 {
-    if (h * w == 0) return 0;
+pub fn comp_chunk(mat: [][]u32, row: u64, col: u64, h: u64, w: u64) u32 {
+    if (h == 0 or w == 0) return 0;
     var sum: u64 = 0;
-    for (0..h) |i| {
-        for (0..w) |j| {
+    const max_height: u64 = @as(u64, @intCast(mat.len)) - row;
+    const max_width: u64 = @as(u64, @intCast(mat[0].len)) - col;
+    const iter_height = if (h < max_height) h else max_height;
+    const iter_width = if (w < max_width) w else max_width;
+    for (0..iter_height) |i| {
+        for (0..iter_width) |j| {
             sum += mat[row + i][col + j];
         }
     }
