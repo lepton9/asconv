@@ -76,6 +76,20 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(compress_lib);
 
+    // Result
+    const result_mod = b.createModule(.{
+        .root_source_file = b.path("src/result.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    cli_mod.addImport("result", result_mod);
+    const result_lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = "cli",
+        .root_module = result_mod,
+    });
+    b.installArtifact(result_lib);
+
     // Stb_image
     const stb_mod = b.addModule("stb_image", .{
         .root_source_file = b.path("src/stb_image.zig"),
