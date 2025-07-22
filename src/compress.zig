@@ -22,6 +22,20 @@ pub const Image = struct {
         return img;
     }
 
+    pub fn resize(self: *Image, allocator: *std.mem.Allocator, height: u32, width: u32) !void {
+        for (self.pixels) |row| {
+            allocator.free(row);
+        }
+        allocator.free(self.pixels);
+        self.pixels = try allocator.alloc([]u32, height);
+        for (self.pixels) |*row| {
+            row.* = try allocator.alloc(u32, width);
+            @memset(row.*, 0);
+        }
+        self.height = height;
+        self.widht = width;
+    }
+
     pub fn deinit(self: *Image, allocator: *std.mem.Allocator) void {
         for (self.pixels) |row| {
             allocator.free(row);
