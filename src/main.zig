@@ -6,6 +6,60 @@ const arg = @import("arg");
 const compress = @import("compress");
 const Image = compress.Image;
 
+const commands = [_]cmd.Cmd{
+    .{
+        .name = "size",
+        .desc = "Show size of the image",
+        .options = null,
+    },
+    .{
+        .name = "ascii",
+        .desc = "Convert to ascii",
+        .options = null,
+    },
+    .{
+        .name = "compress",
+        .desc = "Compress image",
+        .options = null,
+    },
+    .{
+        .name = "help",
+        .desc = "Print help",
+        .options = null,
+    },
+};
+
+const options = [_]cmd.Option{
+    .{
+        .long_name = "out",
+        .short_name = "o",
+        .desc = "Path of output file",
+        .required = false,
+        .arg_name = "filename",
+    },
+    .{
+        .long_name = "width",
+        .short_name = "w",
+        .desc = "Width of wanted image",
+        .required = false,
+        .arg_name = "int",
+    },
+    .{
+        .long_name = "height",
+        .short_name = "h",
+        .desc = "Height of wanted image",
+        .required = false,
+        .arg_name = "int",
+    },
+    .{
+        .long_name = "scale",
+        .short_name = "s",
+        .desc = "Scale the image to size",
+        .required = false,
+        .arg_name = "float",
+    },
+};
+
 fn handle_cli(cli_result: cli.ResultCli) ?cli.Cli {
     return cli_result.unwrap_try() catch {
         const err = cli_result.unwrap_err();
