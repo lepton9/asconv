@@ -1,7 +1,46 @@
 const std = @import("std");
 const stb = @import("stb_image");
+const cli = @import("cli");
+const cmd = @import("cmd");
+const arg = @import("arg");
 const compress = @import("compress");
 const Image = compress.Image;
+
+fn handle_cli(cli_result: cli.ResultCli) ?cli.Cli {
+    return cli_result.unwrap_try() catch {
+        const err = cli_result.unwrap_err();
+        switch (err.err) {
+            cli.ArgsError.UnknownCommand => {
+                std.log.err("Unknown command: '{s}'", .{err.get_ctx()});
+            },
+            cli.ArgsError.UnknownOption => {
+                std.log.err("Unknown option: '{s}'\n", .{err.get_ctx()});
+            },
+            cli.ArgsError.NoCommand => {
+                std.log.err("No command given\n", .{});
+            },
+            cli.ArgsError.NoGlobalArgs => {
+                std.log.err("No global arguments\n", .{});
+            },
+            cli.ArgsError.NoOptionValue => {
+                std.log.err("No option value for option '{s}'\n", .{err.get_ctx()});
+            },
+            cli.ArgsError.NoRequiredOption => {
+                std.log.err("Required options not given: {s}\n", .{err.get_ctx()});
+            },
+            cli.ArgsError.TooManyArgs => {
+                std.log.err("Too many arguments: '{s}'\n", .{err.get_ctx()});
+            },
+            cli.ArgsError.DuplicateOption => {
+                std.log.err("Duplicate option: '{s}'\n", .{err.get_ctx()});
+            },
+            else => {
+                std.log.err("Error\n", .{});
+            },
+        }
+        return null;
+    };
+}
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};

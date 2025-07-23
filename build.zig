@@ -85,7 +85,7 @@ pub fn build(b: *std.Build) void {
     cli_mod.addImport("result", result_mod);
     const result_lib = b.addLibrary(.{
         .linkage = .static,
-        .name = "cli",
+        .name = "result",
         .root_module = result_mod,
     });
     b.installArtifact(result_lib);
