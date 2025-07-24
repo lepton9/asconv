@@ -158,6 +158,44 @@ fn scale_nearest(
     }
 }
 
+fn scale_bilinear(
+    src: [][]u32,
+    dst: [][]u32,
+    src_width: usize,
+    src_height: usize,
+    dst_width: usize,
+    dst_height: usize,
+) !void {
+    for (dst, 0..) |*dst_row, y| {
+        const fy = (@as(f64, @floatFromInt(y)) * @as(f64, @floatFromInt(src_height))) / @as(f64, @floatFromInt(dst_height));
+        const y0 = @min(src_height - 1, @as(usize, @intFromFloat(std.math.floor(fy))));
+        const y1 = @min(src_height - 1, y0 + 1);
+        const wy = fy - @as(f64, @floatFromInt(y0));
+
+        for (dst_row.*, 0..) |*dst_pixel, x| {
+            const fx = (@as(f64, @floatFromInt(x)) * @as(f64, @floatFromInt(src_width))) / @as(f64, @floatFromInt(dst_width));
+            const x0 = @min(src_width - 1, @as(usize, @intFromFloat(std.math.floor(fx))));
+            const x1 = @min(src_width - 1, x0 + 1);
+            const wx = fx - @as(f64, @floatFromInt(x0));
+
+            const p00 = unpack_rgba(src[y0][x0]);
+            const p10 = unpack_rgba(src[y0][x1]);
+            const p01 = unpack_rgba(src[y1][x0]);
+            const p11 = unpack_rgba(src[y1][x1]);
+
+            var result: [4]u8 = undefined;
+
+            inline for (0..4) |i| {
+                const top = (1.0 - wx) * @as(f64, @floatFromInt(p00[i])) + wx * @as(f64, @floatFromInt(p10[i]));
+                const bot = (1.0 - wx) * @as(f64, @floatFromInt(p01[i])) + wx * @as(f64, @floatFromInt(p11[i]));
+                const value = (1.0 - wy) * top + wy * bot;
+                result[i] = @intFromFloat(std.math.clamp(value, 0.0, 255.0));
+            }
+            dst_pixel.* = pack_rgba(result);
+        }
+    }
+}
+
 pub fn r(pixel: u32) u8 {
     return @truncate((0xFF000000 & pixel) >> 8 * 3);
 }
@@ -195,12 +233,20 @@ pub fn pixel_to_char(pixel: u32) []const u8 {
     return base_char_table[index .. index + 1];
 }
 
-pub fn pack_pixel(r_v: u8, g_v: u8, b_v: u8, a_v: u8) u32 {
-    // 0xRRGGBBAA
-    return (@as(u32, r_v) << 24) |
-        (@as(u32, g_v) << 16) |
-        (@as(u32, b_v) << 8) |
-        @as(u32, a_v);
+fn unpack_rgba(pixel: u32) [4]u8 {
+    return .{
+        @intCast((pixel >> 24) & 0xFF),
+        @intCast((pixel >> 16) & 0xFF),
+        @intCast((pixel >> 8) & 0xFF),
+        @intCast(pixel & 0xFF),
+    };
+}
+
+fn pack_rgba(rgba: [4]u8) u32 {
+    return (@as(u32, rgba[0]) << 24) |
+        (@as(u32, rgba[1]) << 16) |
+        (@as(u32, rgba[2]) << 8) |
+        @as(u32, rgba[3]);
 }
 
 pub fn convert_to_pixel_matrix(allocator: *const std.mem.Allocator, image: *stb.ImageRaw) ![][]u32 {
@@ -218,7 +264,7 @@ pub fn convert_to_pixel_matrix(allocator: *const std.mem.Allocator, image: *stb.
             g_v = if (channels > 1) image.data.?[base + 1] else r_v;
             b_v = if (channels > 2) image.data.?[base + 2] else r_v;
             a_v = if (channels > 3) image.data.?[base + 3] else 0xFF;
-            pixel.* = pack_pixel(r_v, g_v, b_v, a_v);
+            pixel.* = pack_rgba(.{ r_v, g_v, b_v, a_v });
         }
     }
     return pixels;
