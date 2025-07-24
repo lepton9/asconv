@@ -211,6 +211,10 @@ fn ascii(cli_: *cli.Cli) !void {
 }
 
 fn cmd_func(cli_: *cli.Cli, args_struct: *cmd.ArgsStructure) !void {
+    if (cli_.cmd == null) {
+        std.log.info("No command", .{});
+        return;
+    }
     const cmd_name = cli_.cmd.?.name.?;
     if (std.mem.eql(u8, cmd_name, "size")) {
         try size(cli_);
@@ -229,6 +233,7 @@ pub fn main() !void {
 
     const app = try cmd.ArgsStructure.init(&malloc);
     defer app.deinit(&malloc);
+    app.cmd_required = true;
     app.set_commands(&commands);
     app.set_options(&options);
 
