@@ -134,20 +134,6 @@ fn output_file(cli_: *cli.Cli) ?[]const u8 {
     return null;
 }
 
-fn make_ascii_data(img: *Image) ![]const u8 {
-    var buffer = std.ArrayList(u8).init(std.heap.page_allocator);
-    defer buffer.deinit();
-    for (img.pixels) |row| {
-        for (row) |pixel| {
-            const c: []const u8 = img.pixel_char(pixel);
-            try buffer.appendSlice(c);
-            try buffer.appendSlice(c);
-        }
-        try buffer.appendSlice("\n");
-    }
-    return buffer.toOwnedSlice();
-}
-
 fn write_to_file(file_path: []const u8, data: []const u8) !void {
     var file = try std.fs.cwd().createFile(file_path, .{});
     defer file.close();
@@ -230,7 +216,7 @@ fn ascii(cli_: *cli.Cli) !?result.ErrorWrap {
     try img.resize(&malloc, height, width);
     img.fit_image();
 
-    const data = try make_ascii_data(img);
+    const data = try img.to_ascii();
     const file = output_file(cli_);
     if (file) |path| {
         try write_to_file(path, data);

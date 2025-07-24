@@ -93,11 +93,11 @@ pub const Image = struct {
         allocator.destroy(self);
     }
 
-    pub fn fit_image(self: *Image) void {
-        const chunk_h: u32 = @as(u32, @intCast(self.raw_image.height)) / self.height;
-        const chunk_w: u32 = @as(u32, @intCast(self.raw_image.width)) / self.widht;
-        if (self.raw_image.data == null) return;
-        const pixels = convert_to_pixel_matrix(&std.heap.page_allocator, self.raw_image) catch return;
+    fn compress_img(self: *Image) void {
+        const chunk_h: u32 = @max(@as(u32, @intCast(self.raw_image.height)) / self.height, 1);
+        const chunk_w: u32 = @max(@as(u32, @intCast(self.raw_image.width)) / self.widht, 1);
+        const pixels: [][]u32 = convert_to_pixel_matrix(&std.heap.page_allocator, self.raw_image) catch return;
+        defer free_pixel_mat(pixels, &std.heap.page_allocator);
         for (0..self.height) |r_i| {
             for (0..self.widht) |c_i| {
                 self.pixels[r_i][c_i] = comp_chunk(pixels, r_i * chunk_h, c_i * chunk_w, chunk_h, chunk_w);
@@ -105,13 +105,58 @@ pub const Image = struct {
         }
     }
 
-    pub fn pixel_char(self: *Image, pixel: u32) []const u8 {
+    pub fn fit_image(self: *Image) void {
+        if (self.raw_image.data == null) return;
+        const pixels: [][]u32 = convert_to_pixel_matrix(&std.heap.page_allocator, self.raw_image) catch return;
+        defer free_pixel_mat(pixels, &std.heap.page_allocator);
+        try scale_nearest(
+            pixels,
+            self.pixels,
+            @intCast(self.raw_image.width),
+            @intCast(self.raw_image.height),
+            self.widht,
+            self.height,
+        );
+    }
+
+    fn pixel_char(self: *Image, pixel: u32) []const u8 {
         if (self.ascii_info) |info| {
             return info.pixel_to_char(pixel);
         }
         return pixel_to_char(pixel);
     }
+
+    pub fn to_ascii(self: *Image) ![]const u8 {
+        var buffer = std.ArrayList(u8).init(std.heap.page_allocator);
+        defer buffer.deinit();
+        for (self.pixels) |row| {
+            for (row) |pixel| {
+                const c: []const u8 = self.pixel_char(pixel);
+                try buffer.appendSlice(c);
+                try buffer.appendSlice(c);
+            }
+            try buffer.appendSlice("\n");
+        }
+        return buffer.toOwnedSlice();
+    }
 };
+
+fn scale_nearest(
+    src: [][]u32,
+    dst: [][]u32,
+    src_width: usize,
+    src_height: usize,
+    dst_width: usize,
+    dst_height: usize,
+) !void {
+    for (dst, 0..) |*dst_row, y| {
+        for (dst_row.*, 0..) |*dst_pixel, x| {
+            const src_x = @min(src_width - 1, (x * src_width) / dst_width);
+            const src_y = @min(src_height - 1, (y * src_height) / dst_height);
+            dst_pixel.* = src[src_y][src_x];
+        }
+    }
+}
 
 pub fn r(pixel: u32) u8 {
     return @truncate((0xFF000000 & pixel) >> 8 * 3);
@@ -179,8 +224,9 @@ pub fn convert_to_pixel_matrix(allocator: *const std.mem.Allocator, image: *stb.
     return pixels;
 }
 
-pub fn calc_chunk_size(h: u32, w: u32, h_new: u32, w_new: u32) struct { u32, u32 } {
-    return .{ h / h_new, w / w_new };
+pub fn free_pixel_mat(pixels: [][]u32, allocator: *const std.mem.Allocator) void {
+    for (pixels) |row| allocator.free(row);
+    allocator.free(pixels);
 }
 
 pub fn comp_chunk(mat: [][]u32, row: u64, col: u64, h: u64, w: u64) u32 {
