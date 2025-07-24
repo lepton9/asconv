@@ -91,6 +91,15 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(result_lib);
 
+    // Utils
+    const utils_mod = b.createModule(.{
+        .root_source_file = b.path("src/utils.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    compress_mod.addImport("utils", utils_mod);
+    cli_mod.addImport("utils", utils_mod);
+
     // Stb_image
     const stb_mod = b.addModule("stb_image", .{
         .root_source_file = b.path("src/stb_image.zig"),

@@ -1,5 +1,8 @@
 const std = @import("std");
 const stb = @import("stb_image");
+const utils = @import("utils");
+const itof = utils.itof;
+const ftoi = utils.ftoi;
 
 const base_char_table = "@#%xo;:,. ";
 
@@ -167,16 +170,16 @@ fn scale_bilinear(
     dst_height: usize,
 ) !void {
     for (dst, 0..) |*dst_row, y| {
-        const fy = (@as(f64, @floatFromInt(y)) * @as(f64, @floatFromInt(src_height))) / @as(f64, @floatFromInt(dst_height));
-        const y0 = @min(src_height - 1, @as(usize, @intFromFloat(std.math.floor(fy))));
-        const y1 = @min(src_height - 1, y0 + 1);
-        const wy = fy - @as(f64, @floatFromInt(y0));
+        const fy: f64 = (itof(f64, y) * itof(f64, src_height)) / itof(f64, dst_height);
+        const y0: usize = @min(src_height - 1, ftoi(usize, fy));
+        const y1: usize = @min(src_height - 1, y0 + 1);
+        const wy: f64 = fy - itof(f64, y0);
 
         for (dst_row.*, 0..) |*dst_pixel, x| {
-            const fx = (@as(f64, @floatFromInt(x)) * @as(f64, @floatFromInt(src_width))) / @as(f64, @floatFromInt(dst_width));
-            const x0 = @min(src_width - 1, @as(usize, @intFromFloat(std.math.floor(fx))));
-            const x1 = @min(src_width - 1, x0 + 1);
-            const wx = fx - @as(f64, @floatFromInt(x0));
+            const fx: f64 = (itof(f64, x) * itof(f64, src_width)) / itof(f64, dst_width);
+            const x0: usize = @min(src_width - 1, ftoi(usize, fx));
+            const x1: usize = @min(src_width - 1, x0 + 1);
+            const wx: f64 = fx - itof(f64, x0);
 
             const p00 = unpack_rgba(src[y0][x0]);
             const p10 = unpack_rgba(src[y0][x1]);
@@ -186,9 +189,9 @@ fn scale_bilinear(
             var result: [4]u8 = undefined;
 
             inline for (0..4) |i| {
-                const top = (1.0 - wx) * @as(f64, @floatFromInt(p00[i])) + wx * @as(f64, @floatFromInt(p10[i]));
-                const bot = (1.0 - wx) * @as(f64, @floatFromInt(p01[i])) + wx * @as(f64, @floatFromInt(p11[i]));
-                const value = (1.0 - wy) * top + wy * bot;
+                const top: f64 = (1.0 - wx) * itof(f64, p00[i]) + wx * itof(f64, p10[i]);
+                const bot: f64 = (1.0 - wx) * itof(f64, p01[i]) + wx * itof(f64, p11[i]);
+                const value: f64 = (1.0 - wy) * top + wy * bot;
                 result[i] = @intFromFloat(std.math.clamp(value, 0.0, 255.0));
             }
             dst_pixel.* = pack_rgba(result);
