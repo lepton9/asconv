@@ -83,6 +83,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     cli_mod.addImport("result", result_mod);
+    exe_mod.addImport("result", result_mod);
     const result_lib = b.addLibrary(.{
         .linkage = .static,
         .name = "result",

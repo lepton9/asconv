@@ -4,7 +4,15 @@ const cli = @import("cli");
 const cmd = @import("cmd");
 const arg = @import("arg");
 const compress = @import("compress");
+const result = @import("result");
 const Image = compress.Image;
+
+pub const ExecError = error{
+    NoFileName,
+    FileLoadError,
+    ParseErrorHeight,
+    ParseErrorWidth,
+};
 
 const characters = "M0WN#B@RZUKHEDQA84wmhPkXVOGFgdbS52yqpYL96*3TJCunfzrojea7%x1vscItli+=:-. ";
 
@@ -98,6 +106,26 @@ fn handle_cli(cli_result: cli.ResultCli) ?cli.Cli {
     };
 }
 
+fn handle_exec_error(err: result.ErrorWrap) void {
+    switch (err.err) {
+        ExecError.NoFileName => {
+            std.log.err("No file given as argument", .{});
+        },
+        ExecError.FileLoadError => {
+            std.log.err("Failed to load image '{s}'", .{err.get_ctx()});
+        },
+        ExecError.ParseErrorHeight => {
+            std.log.err("Failed to parse height '{s}'", .{err.get_ctx()});
+        },
+        ExecError.ParseErrorWidth => {
+            std.log.err("Failed to parse width '{s}'", .{err.get_ctx()});
+        },
+        else => {
+            std.log.err("Error: '{s}'", .{err.get_ctx()});
+        },
+    }
+}
+
 fn output_file(cli_: *cli.Cli) ?[]const u8 {
     const option = cli_.find_opt("out");
     if (option) |opt| {
@@ -134,7 +162,7 @@ fn write_to_stdio(data: []const u8) !void {
     try bw.flush();
 }
 
-fn size(cli_: *cli.Cli) !void {
+fn size(cli_: *cli.Cli) !?result.ErrorWrap {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var malloc = gpa.allocator();
     const stdout_file = std.io.getStdOut().writer();
@@ -144,29 +172,36 @@ fn size(cli_: *cli.Cli) !void {
     const filename = cli_.global_args orelse "";
     const img = try Image.init(&malloc, 0, 0);
     defer Image.deinit(img, &malloc);
-    img.raw_image.* = try stb.load_image(filename, null);
+    img.raw_image.* = stb.load_image(filename, null) catch {
+        return result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{filename});
+    };
     img.name = filename;
 
     try stdout.print("Image: {s}\n", .{filename});
     try stdout.print("Size: {d}x{d}\n", .{ img.raw_image.width, img.raw_image.height });
     try stdout.print("Channels: {d}\n", .{img.raw_image.nchan});
     try bw.flush();
+    return null;
 }
 
-fn ascii(cli_: *cli.Cli) !void {
+fn ascii(cli_: *cli.Cli) !?result.ErrorWrap {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var malloc = gpa.allocator();
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
 
-    const filename = cli_.global_args orelse "";
+    const filename = cli_.global_args orelse {
+        return result.ErrorWrap.create(ExecError.NoFileName, "", .{});
+    };
     var height: u32 = 0;
     var width: u32 = 0;
 
     var img = try Image.init(&malloc, height, width);
     defer Image.deinit(img, &malloc);
-    img.raw_image.* = try stb.load_image(filename, null);
+    img.raw_image.* = stb.load_image(filename, null) catch {
+        return result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{filename});
+    };
     img.name = filename;
     img.ascii_info = try compress.AsciiInfo.init(&malloc, characters);
 
@@ -179,17 +214,15 @@ fn ascii(cli_: *cli.Cli) !void {
         const opt_height = cli_.find_opt("height");
         const opt_width = cli_.find_opt("width");
         height = if (opt_height != null)
-            std.fmt.parseInt(u32, opt_height.?.arg_value.?, 10) catch |err| {
-                try stdout.print("Error parsing height: {}\n", .{err});
-                return;
+            std.fmt.parseInt(u32, opt_height.?.arg_value.?, 10) catch {
+                return result.ErrorWrap.create(ExecError.ParseErrorHeight, "{s}", .{opt_height.?.arg_value.?});
             }
         else
             @as(u32, @intCast(img.raw_image.height));
 
         width = if (opt_width != null)
-            std.fmt.parseInt(u32, opt_width.?.arg_value.?, 10) catch |err| {
-                try stdout.print("Error parsing width: {}\n", .{err});
-                return;
+            std.fmt.parseInt(u32, opt_width.?.arg_value.?, 10) catch {
+                return result.ErrorWrap.create(ExecError.ParseErrorWidth, "{s}", .{opt_width.?.arg_value.?});
             }
         else
             @as(u32, @intCast(img.raw_image.width));
@@ -208,23 +241,23 @@ fn ascii(cli_: *cli.Cli) !void {
     try stdout.print("Image: {s}\n", .{filename});
     try stdout.print("Image of size {d}x{d} with {d} channels\n", .{ img.raw_image.width, img.raw_image.height, img.raw_image.nchan });
     try bw.flush();
+    return null;
 }
 
-fn cmd_func(cli_: *cli.Cli, args_struct: *cmd.ArgsStructure) !void {
+fn cmd_func(cli_: *cli.Cli, args_struct: *cmd.ArgsStructure) !?result.ErrorWrap {
     if (cli_.cmd == null) {
         std.log.info("No command", .{});
-        return;
+        return null;
     }
     const cmd_name = cli_.cmd.?.name.?;
     if (std.mem.eql(u8, cmd_name, "size")) {
-        try size(cli_);
+        return try size(cli_);
     } else if (std.mem.eql(u8, cmd_name, "ascii")) {
-        try ascii(cli_);
-    } else if (std.mem.eql(u8, cmd_name, "compress")) {
-        return;
-    } else if (std.mem.eql(u8, cmd_name, "help")) {
+        return try ascii(cli_);
+    } else if (std.mem.eql(u8, cmd_name, "compress")) {} else if (std.mem.eql(u8, cmd_name, "help")) {
         args_struct.print_commands();
     }
+    return null;
 }
 
 pub fn main() !void {
@@ -244,5 +277,6 @@ pub fn main() !void {
     const cli_result = cli.validate_parsed_args(args, app);
     var cli_ = handle_cli(cli_result) orelse return;
 
-    try cmd_func(&cli_, app);
+    const err = try cmd_func(&cli_, app);
+    if (err) |e| handle_exec_error(e);
 }
