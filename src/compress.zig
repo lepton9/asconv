@@ -1,12 +1,55 @@
 const std = @import("std");
 const stb = @import("stb_image");
 
+const base_char_table = "@#%xo;:,. ";
+
+pub const AsciiCharInfo = struct { start: usize, len: u8 };
+
+pub const AsciiInfo = struct {
+    char_table: []const u8,
+    char_info: []AsciiCharInfo,
+    len: u32,
+
+    pub fn init(allocator: *std.mem.Allocator, ascii_chars: []const u8) !*AsciiInfo {
+        var info = try allocator.create(AsciiInfo);
+        info.char_table = ascii_chars;
+        var char_info = std.ArrayList(AsciiCharInfo).init(allocator.*);
+        defer char_info.deinit();
+
+        var i: usize = 0;
+        while (i < ascii_chars.len) {
+            const len = try std.unicode.utf8ByteSequenceLength(ascii_chars[i]);
+            try char_info.append(.{ .start = i, .len = @intCast(len) });
+            i += len;
+        }
+
+        info.len = @intCast(info.char_table.len);
+        info.char_info = try char_info.toOwnedSlice();
+        return info;
+    }
+
+    pub fn deinit(self: *AsciiInfo, allocator: *std.mem.Allocator) void {
+        allocator.destroy(self);
+    }
+
+    pub fn select_char(self: *AsciiInfo, index: u32) []const u8 {
+        const char_info: AsciiCharInfo = self.char_info[@min(index, self.char_info.len - 1)];
+        return self.char_table[char_info.start .. char_info.start + char_info.len];
+    }
+
+    pub fn pixel_to_char(self: *AsciiInfo, pixel: u32) []const u8 {
+        const index: u32 = (gray_scale(pixel) * self.len) / 255;
+        return self.select_char(index);
+    }
+};
+
 pub const Image = struct {
     name: []const u8,
     height: u32,
     widht: u32,
     pixels: [][]u32,
     raw_image: *stb.ImageRaw = undefined,
+    ascii_info: ?*AsciiInfo = null,
 
     pub fn init(allocator: *std.mem.Allocator, height: u32, width: u32) !*Image {
         var img = try allocator.create(Image);
@@ -19,6 +62,7 @@ pub const Image = struct {
         }
         img.raw_image = try allocator.create(stb.ImageRaw);
         img.raw_image.* = stb.ImageRaw{};
+        img.ascii_info = null;
         return img;
     }
 
@@ -43,6 +87,9 @@ pub const Image = struct {
         allocator.free(self.pixels);
         self.raw_image.deinit();
         allocator.destroy(self.raw_image);
+        if (self.ascii_info) |info| {
+            info.deinit(allocator);
+        }
         allocator.destroy(self);
     }
 
@@ -56,6 +103,13 @@ pub const Image = struct {
                 self.pixels[r_i][c_i] = comp_chunk(pixels, r_i * chunk_h, c_i * chunk_w, chunk_h, chunk_w);
             }
         }
+    }
+
+    pub fn pixel_char(self: *Image, pixel: u32) []const u8 {
+        if (self.ascii_info) |info| {
+            return info.pixel_to_char(pixel);
+        }
+        return pixel_to_char(pixel);
     }
 };
 
@@ -90,13 +144,10 @@ pub fn gray_scale(pixel: u32) u8 {
     return @intFromFloat(val);
 }
 
-pub fn pixel_to_char(pixel: u32) u8 {
-    const n: u16 = 10;
-    const table = "@#%xo;:,. ";
-    // const table = " .,:;ox%#@";
-    // const index = (pixel_avg(pixel) * n) / 255;
+pub fn pixel_to_char(pixel: u32) []const u8 {
+    const n: u32 = base_char_table.len;
     const index = (gray_scale(pixel) * n) / 255;
-    return table[index];
+    return base_char_table[index .. index + 1];
 }
 
 pub fn pack_pixel(r_v: u8, g_v: u8, b_v: u8, a_v: u8) u32 {

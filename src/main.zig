@@ -6,6 +6,8 @@ const arg = @import("arg");
 const compress = @import("compress");
 const Image = compress.Image;
 
+const characters = "M0WN#B@RZUKHEDQA84wmhPkXVOGFgdbS52yqpYL96*3TJCunfzrojea7%x1vscItli+=:-. ";
+
 const commands = [_]cmd.Cmd{
     .{
         .name = "size",
@@ -130,6 +132,7 @@ fn ascii(cli_: *cli.Cli) !void {
     defer Image.deinit(img, &malloc);
     img.raw_image.* = try stb.load_image(filename, null);
     img.name = filename;
+    img.ascii_info = try compress.AsciiInfo.init(&malloc, characters);
 
     const scale_opt = cli_.find_opt("scale");
     if (scale_opt != null) {
@@ -160,7 +163,8 @@ fn ascii(cli_: *cli.Cli) !void {
 
     for (img.pixels) |row| {
         for (row) |pixel| {
-            try stdout.print("{c}", .{compress.pixel_to_char(pixel)});
+            const c: []const u8 = img.pixel_char(pixel);
+            try stdout.print("{s}{s}", .{ c, c });
         }
         try stdout.print("\n", .{});
     }
