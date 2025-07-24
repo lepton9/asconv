@@ -98,6 +98,42 @@ fn handle_cli(cli_result: cli.ResultCli) ?cli.Cli {
     };
 }
 
+fn output_file(cli_: *cli.Cli) ?[]const u8 {
+    const option = cli_.find_opt("out");
+    if (option) |opt| {
+        return opt.arg_value.?;
+    }
+    return null;
+}
+
+fn make_ascii_data(img: *Image) ![]const u8 {
+    var buffer = std.ArrayList(u8).init(std.heap.page_allocator);
+    defer buffer.deinit();
+    for (img.pixels) |row| {
+        for (row) |pixel| {
+            const c: []const u8 = img.pixel_char(pixel);
+            try buffer.appendSlice(c);
+            try buffer.appendSlice(c);
+        }
+        try buffer.appendSlice("\n");
+    }
+    return buffer.toOwnedSlice();
+}
+
+fn write_to_file(file_path: []const u8, data: []const u8) !void {
+    var file = try std.fs.cwd().createFile(file_path, .{});
+    defer file.close();
+    try file.writeAll(data);
+}
+
+fn write_to_stdio(data: []const u8) !void {
+    const stdout_file = std.io.getStdOut().writer();
+    var bw = std.io.bufferedWriter(stdout_file);
+    const stdout = bw.writer();
+    try stdout.print("{s}\n", .{data});
+    try bw.flush();
+}
+
 fn size(cli_: *cli.Cli) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var malloc = gpa.allocator();
@@ -128,7 +164,7 @@ fn ascii(cli_: *cli.Cli) !void {
     var height: u32 = 0;
     var width: u32 = 0;
 
-    const img = try Image.init(&malloc, height, width);
+    var img = try Image.init(&malloc, height, width);
     defer Image.deinit(img, &malloc);
     img.raw_image.* = try stb.load_image(filename, null);
     img.name = filename;
@@ -161,14 +197,13 @@ fn ascii(cli_: *cli.Cli) !void {
     try img.resize(&malloc, height, width);
     img.fit_image();
 
-    for (img.pixels) |row| {
-        for (row) |pixel| {
-            const c: []const u8 = img.pixel_char(pixel);
-            try stdout.print("{s}{s}", .{ c, c });
-        }
-        try stdout.print("\n", .{});
+    const data = try make_ascii_data(img);
+    const file = output_file(cli_);
+    if (file) |path| {
+        try write_to_file(path, data);
+    } else {
+        try write_to_stdio(data);
     }
-    try bw.flush();
 
     try stdout.print("Image: {s}\n", .{filename});
     try stdout.print("Image of size {d}x{d} with {d} channels\n", .{ img.raw_image.width, img.raw_image.height, img.raw_image.nchan });
