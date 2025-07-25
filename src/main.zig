@@ -5,6 +5,7 @@ const cmd = @import("cmd");
 const arg = @import("arg");
 const compress = @import("compress");
 const result = @import("result");
+const utils = @import("utils");
 const Image = compress.Image;
 
 pub const ExecError = error{
@@ -12,6 +13,7 @@ pub const ExecError = error{
     FileLoadError,
     ParseErrorHeight,
     ParseErrorWidth,
+    ParseErrorScale,
 };
 
 const characters = "M0WN#B@RZUKHEDQA84wmhPkXVOGFgdbS52yqpYL96*3TJCunfzrojea7%x1vscItli+=:-. ";
@@ -120,6 +122,9 @@ fn handle_exec_error(err: result.ErrorWrap) void {
         ExecError.ParseErrorWidth => {
             std.log.err("Failed to parse width '{s}'", .{err.get_ctx()});
         },
+        ExecError.ParseErrorScale => {
+            std.log.err("Failed to parse scale '{s}'", .{err.get_ctx()});
+        },
         else => {
             std.log.err("Error: '{s}'", .{err.get_ctx()});
         },
@@ -180,40 +185,34 @@ fn ascii(cli_: *cli.Cli) !?result.ErrorWrap {
     const filename = cli_.global_args orelse {
         return result.ErrorWrap.create(ExecError.NoFileName, "", .{});
     };
-    var height: u32 = 0;
-    var width: u32 = 0;
+    const raw_image = stb.load_image(filename, null) catch {
+        return result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{filename});
+    };
+    var height: u32 = @intCast(raw_image.height);
+    var width: u32 = @intCast(raw_image.width);
+
+    if (cli_.find_opt("height")) |opt_height| {
+        height = std.fmt.parseInt(u32, opt_height.arg_value.?, 10) catch {
+            return result.ErrorWrap.create(ExecError.ParseErrorHeight, "{s}", .{opt_height.arg_value.?});
+        };
+    }
+    if (cli_.find_opt("width")) |opt_width| {
+        width = std.fmt.parseInt(u32, opt_width.arg_value.?, 10) catch {
+            return result.ErrorWrap.create(ExecError.ParseErrorWidth, "{s}", .{opt_width.arg_value.?});
+        };
+    }
+    if (cli_.find_opt("scale")) |opt_scale| {
+        const scalar = std.fmt.parseFloat(f32, opt_scale.arg_value.?) catch {
+            return result.ErrorWrap.create(ExecError.ParseErrorScale, "{s}", .{opt_scale.arg_value.?});
+        };
+        height = @intFromFloat(utils.itof(f32, height) * scalar);
+        width = @intFromFloat(utils.itof(f32, width) * scalar);
+    }
 
     var img = try Image.init(&malloc, height, width);
     defer Image.deinit(img, &malloc);
-    img.raw_image.* = stb.load_image(filename, null) catch {
-        return result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{filename});
-    };
-    img.name = filename;
+    img.set_raw_image(raw_image, filename);
     img.ascii_info = try compress.AsciiInfo.init(&malloc, characters);
-
-    const scale_opt = cli_.find_opt("scale");
-    if (scale_opt != null) {
-        const mul = try std.fmt.parseFloat(f32, scale_opt.?.arg_value.?);
-        height = @intFromFloat(@as(f32, @floatFromInt(img.raw_image.height)) * mul);
-        width = @intFromFloat(@as(f32, @floatFromInt(img.raw_image.width)) * mul);
-    } else {
-        const opt_height = cli_.find_opt("height");
-        const opt_width = cli_.find_opt("width");
-        height = if (opt_height != null)
-            std.fmt.parseInt(u32, opt_height.?.arg_value.?, 10) catch {
-                return result.ErrorWrap.create(ExecError.ParseErrorHeight, "{s}", .{opt_height.?.arg_value.?});
-            }
-        else
-            @as(u32, @intCast(img.raw_image.height));
-
-        width = if (opt_width != null)
-            std.fmt.parseInt(u32, opt_width.?.arg_value.?, 10) catch {
-                return result.ErrorWrap.create(ExecError.ParseErrorWidth, "{s}", .{opt_width.?.arg_value.?});
-            }
-        else
-            @as(u32, @intCast(img.raw_image.width));
-    }
-    try img.resize(&malloc, height, width);
     try img.fit_image();
 
     const data = try img.to_ascii();

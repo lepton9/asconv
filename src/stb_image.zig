@@ -18,6 +18,10 @@ pub const ImageRaw = struct {
         self.height = 0;
         self.nchan = 0;
     }
+
+    pub fn empty(self: *ImageRaw) bool {
+        return self.data == null;
+    }
 };
 
 pub fn load_image(filename: []const u8, nchannels: ?i32) !ImageRaw {

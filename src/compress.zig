@@ -69,6 +69,19 @@ pub const Image = struct {
         return img;
     }
 
+    pub fn deinit(self: *Image, allocator: *std.mem.Allocator) void {
+        for (self.pixels) |row| {
+            allocator.free(row);
+        }
+        allocator.free(self.pixels);
+        self.raw_image.deinit();
+        allocator.destroy(self.raw_image);
+        if (self.ascii_info) |info| {
+            info.deinit(allocator);
+        }
+        allocator.destroy(self);
+    }
+
     pub fn resize(self: *Image, allocator: *std.mem.Allocator, height: u32, width: u32) !void {
         for (self.pixels) |row| {
             allocator.free(row);
@@ -83,17 +96,12 @@ pub const Image = struct {
         self.widht = width;
     }
 
-    pub fn deinit(self: *Image, allocator: *std.mem.Allocator) void {
-        for (self.pixels) |row| {
-            allocator.free(row);
+    pub fn set_raw_image(self: *Image, raw_image: stb.ImageRaw, filename: []const u8) void {
+        if (!self.raw_image.empty()) {
+            self.raw_image.deinit();
         }
-        allocator.free(self.pixels);
-        self.raw_image.deinit();
-        allocator.destroy(self.raw_image);
-        if (self.ascii_info) |info| {
-            info.deinit(allocator);
-        }
-        allocator.destroy(self);
+        self.raw_image.* = raw_image;
+        self.name = filename;
     }
 
     fn compress_img(self: *Image) void {
