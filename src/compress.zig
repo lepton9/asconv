@@ -108,11 +108,11 @@ pub const Image = struct {
         }
     }
 
-    pub fn fit_image(self: *Image) void {
-        if (self.raw_image.data == null) return;
-        const pixels: [][]u32 = convert_to_pixel_matrix(&std.heap.page_allocator, self.raw_image) catch return;
+    pub fn fit_image(self: *Image) !void {
+        if (self.raw_image.data == null) return error.NoImageData;
+        const pixels: [][]u32 = try convert_to_pixel_matrix(&std.heap.page_allocator, self.raw_image);
         defer free_pixel_mat(pixels, &std.heap.page_allocator);
-        try scale_nearest(
+        scale_nearest(
             pixels,
             self.pixels,
             @intCast(self.raw_image.width),
@@ -151,7 +151,7 @@ fn scale_nearest(
     src_height: usize,
     dst_width: usize,
     dst_height: usize,
-) !void {
+) void {
     for (dst, 0..) |*dst_row, y| {
         for (dst_row.*, 0..) |*dst_pixel, x| {
             const src_x = @min(src_width - 1, (x * src_width) / dst_width);
@@ -168,7 +168,7 @@ fn scale_bilinear(
     src_height: usize,
     dst_width: usize,
     dst_height: usize,
-) !void {
+) void {
     for (dst, 0..) |*dst_row, y| {
         const fy: f64 = (itof(f64, y) * itof(f64, src_height)) / itof(f64, dst_height);
         const y0: usize = @min(src_height - 1, ftoi(usize, fy));

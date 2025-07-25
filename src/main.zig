@@ -214,7 +214,7 @@ fn ascii(cli_: *cli.Cli) !?result.ErrorWrap {
             @as(u32, @intCast(img.raw_image.width));
     }
     try img.resize(&malloc, height, width);
-    img.fit_image();
+    try img.fit_image();
 
     const data = try img.to_ascii();
     const file = output_file(cli_);
