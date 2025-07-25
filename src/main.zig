@@ -155,14 +155,14 @@ fn write_to_stdio(data: []const u8) !void {
 
 fn size(cli_: *cli.Cli) !?result.ErrorWrap {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var malloc = gpa.allocator();
+    const malloc = gpa.allocator();
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
 
     const filename = cli_.global_args orelse "";
-    const img = try Image.init(&malloc, 0, 0);
-    defer Image.deinit(img, &malloc);
+    const img = try Image.init(malloc, 0, 0);
+    defer Image.deinit(img);
     img.raw_image.* = stb.load_image(filename, null) catch {
         return result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{filename});
     };
@@ -177,7 +177,7 @@ fn size(cli_: *cli.Cli) !?result.ErrorWrap {
 
 fn ascii(cli_: *cli.Cli) !?result.ErrorWrap {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var malloc = gpa.allocator();
+    const malloc = gpa.allocator();
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
@@ -209,10 +209,10 @@ fn ascii(cli_: *cli.Cli) !?result.ErrorWrap {
         width = @intFromFloat(utils.itof(f32, width) * scalar);
     }
 
-    var img = try Image.init(&malloc, height, width);
-    defer Image.deinit(img, &malloc);
+    var img = try Image.init(malloc, height, width);
+    defer Image.deinit(img);
     img.set_raw_image(raw_image, filename);
-    img.ascii_info = try compress.AsciiInfo.init(&malloc, characters);
+    try img.set_ascii_info(characters);
     try img.fit_image();
 
     const data = try img.to_ascii();

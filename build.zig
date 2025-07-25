@@ -98,6 +98,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     compress_mod.addImport("utils", utils_mod);
+    exe_mod.addImport("utils", utils_mod);
     cli_mod.addImport("utils", utils_mod);
 
     // Stb_image
