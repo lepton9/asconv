@@ -70,6 +70,13 @@ const options = [_]cmd.Option{
         .required = false,
         .arg_name = "float",
     },
+    .{
+        .long_name = "reverse",
+        .short_name = "r",
+        .desc = "Reverse the charset",
+        .required = false,
+        .arg_name = null,
+    },
 };
 
 fn handle_cli(cli_result: cli.ResultCli) ?cli.Cli {
@@ -190,6 +197,8 @@ fn ascii(cli_: *cli.Cli) !?result.ErrorWrap {
     };
     var height: u32 = @intCast(raw_image.height);
     var width: u32 = @intCast(raw_image.width);
+    const charset: []u8 = try malloc.dupe(u8, characters);
+    defer malloc.free(charset);
 
     if (cli_.find_opt("height")) |opt_height| {
         height = std.fmt.parseInt(u32, opt_height.arg_value.?, 10) catch {
@@ -208,11 +217,14 @@ fn ascii(cli_: *cli.Cli) !?result.ErrorWrap {
         height = @intFromFloat(utils.itof(f32, height) * scalar);
         width = @intFromFloat(utils.itof(f32, width) * scalar);
     }
+    if (cli_.find_opt("reverse")) |_| {
+        std.mem.reverse(u8, charset);
+    }
 
     var img = try Image.init(malloc, height, width);
     defer Image.deinit(img);
     img.set_raw_image(raw_image, filename);
-    try img.set_ascii_info(characters);
+    try img.set_ascii_info(charset);
     try img.fit_image();
 
     const data = try img.to_ascii();
