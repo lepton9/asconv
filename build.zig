@@ -48,19 +48,19 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(cli_lib);
 
-    // Compress
-    const compress_mod = b.createModule(.{
-        .root_source_file = b.path("src/compress.zig"),
+    // Image
+    const img_mod = b.createModule(.{
+        .root_source_file = b.path("src/img.zig"),
         .target = target,
         .optimize = optimize,
     });
-    exec_mod.addImport("compress", compress_mod);
-    const compress_lib = b.addLibrary(.{
+    exec_mod.addImport("img", img_mod);
+    const img_lib = b.addLibrary(.{
         .linkage = .static,
-        .name = "compress",
-        .root_module = compress_mod,
+        .name = "img",
+        .root_module = img_mod,
     });
-    b.installArtifact(compress_lib);
+    b.installArtifact(img_lib);
 
     // Result
     const result_mod = b.createModule(.{
@@ -84,7 +84,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    compress_mod.addImport("utils", utils_mod);
+    img_mod.addImport("utils", utils_mod);
     exe_mod.addImport("utils", utils_mod);
     exec_mod.addImport("utils", utils_mod);
     cli_mod.addImport("utils", utils_mod);
@@ -98,7 +98,7 @@ pub fn build(b: *std.Build) void {
     });
     stb_mod.addIncludePath(b.path("lib"));
     stb_mod.addCSourceFile(.{ .file = b.path("lib/stb_image.c"), .flags = CFlags });
-    compress_mod.addImport("stb_image", stb_mod);
+    img_mod.addImport("stb_image", stb_mod);
     const stb_lib = b.addLibrary(.{
         .name = "stb-image",
         .root_module = stb_mod,

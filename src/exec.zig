@@ -2,10 +2,10 @@ const std = @import("std");
 const cli = @import("cli");
 const cmd = cli.cmd;
 const result = @import("result");
-const compress = @import("compress");
+const image = @import("img");
 const utils = @import("utils");
 const config = @import("config.zig");
-const Image = compress.Image;
+const Image = image.Image;
 
 pub const commands = config.commands;
 pub const options = config.options;
@@ -48,7 +48,7 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     const filename = cli_.global_args orelse "";
     const img = try Image.init(allocator, 0, 0);
     defer Image.deinit(img);
-    img.raw_image.* = compress.load_image(filename, null) catch {
+    img.raw_image.* = image.load_image(filename, null) catch {
         return result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{filename});
     };
     img.name = filename;
@@ -61,14 +61,10 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
 }
 
 fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-
     const filename = cli_.global_args orelse {
         return result.ErrorWrap.create(ExecError.NoFileName, "", .{});
     };
-    const raw_image = compress.load_image(filename, null) catch {
+    const raw_image = image.load_image(filename, null) catch {
         return result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{filename});
     };
     var height: u32 = @intCast(raw_image.height);
@@ -110,10 +106,6 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     } else {
         try write_to_stdio(data);
     }
-
-    try stdout.print("Image: {s}\n", .{filename});
-    try stdout.print("Image of size {d}x{d} with {d} channels\n", .{ img.raw_image.width, img.raw_image.height, img.raw_image.nchan });
-    try bw.flush();
     return null;
 }
 

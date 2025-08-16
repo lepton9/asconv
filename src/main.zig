@@ -1,9 +1,9 @@
 const std = @import("std");
+const result = @import("result");
+const exec = @import("exec");
 const cli = @import("cli");
 const cmd = cli.cmd;
 const arg = cli.arg;
-const result = @import("result");
-const exec = @import("exec");
 
 fn handle_cli(cli_result: cli.ResultCli) ?cli.Cli {
     return cli_result.unwrap_try() catch {
