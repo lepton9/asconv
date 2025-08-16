@@ -16,6 +16,22 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // Exec
+    const exec_mod = b.createModule(.{
+        .root_source_file = b.path("src/exec.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe_mod.addImport("exec", exec_mod);
+
+    // Config
+    const config_mod = b.createModule(.{
+        .root_source_file = b.path("src/config.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exec_mod.addImport("config", config_mod);
+
     // Cli
     const cli_mod = b.createModule(.{
         .root_source_file = b.path("src/cli.zig"),
@@ -23,6 +39,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exe_mod.addImport("cli", cli_mod);
+    exec_mod.addImport("cli", cli_mod);
+    config_mod.addImport("cli", cli_mod);
     const cli_lib = b.addLibrary(.{
         .linkage = .static,
         .name = "cli",
@@ -30,45 +48,13 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(cli_lib);
 
-    // Cmd
-    const cmd_mod = b.createModule(.{
-        .root_source_file = b.path("src/cmd.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    exe_mod.addImport("cmd", cmd_mod);
-    cli_mod.addImport("cmd", cmd_mod);
-    const cmd_lib = b.addLibrary(.{
-        .linkage = .static,
-        .name = "cmd",
-        .root_module = cmd_mod,
-    });
-    b.installArtifact(cmd_lib);
-
-    // Arg
-    const arg_mod = b.createModule(.{
-        .root_source_file = b.path("src/arg.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    cmd_mod.addImport("arg", arg_mod);
-    cli_mod.addImport("arg", arg_mod);
-    exe_mod.addImport("arg", arg_mod);
-    const arg_lib = b.addLibrary(.{
-        .linkage = .static,
-        .name = "arg",
-        .root_module = arg_mod,
-    });
-    b.installArtifact(arg_lib);
-
     // Compress
     const compress_mod = b.createModule(.{
         .root_source_file = b.path("src/compress.zig"),
         .target = target,
         .optimize = optimize,
     });
-    exe_mod.addImport("compress", compress_mod);
-    // Create a static library
+    exec_mod.addImport("compress", compress_mod);
     const compress_lib = b.addLibrary(.{
         .linkage = .static,
         .name = "compress",
@@ -84,6 +70,7 @@ pub fn build(b: *std.Build) void {
     });
     cli_mod.addImport("result", result_mod);
     exe_mod.addImport("result", result_mod);
+    exec_mod.addImport("result", result_mod);
     const result_lib = b.addLibrary(.{
         .linkage = .static,
         .name = "result",
@@ -99,6 +86,7 @@ pub fn build(b: *std.Build) void {
     });
     compress_mod.addImport("utils", utils_mod);
     exe_mod.addImport("utils", utils_mod);
+    exec_mod.addImport("utils", utils_mod);
     cli_mod.addImport("utils", utils_mod);
 
     // Stb_image
@@ -110,7 +98,6 @@ pub fn build(b: *std.Build) void {
     });
     stb_mod.addIncludePath(b.path("lib"));
     stb_mod.addCSourceFile(.{ .file = b.path("lib/stb_image.c"), .flags = CFlags });
-    exe_mod.addImport("stb_image", stb_mod);
     compress_mod.addImport("stb_image", stb_mod);
     const stb_lib = b.addLibrary(.{
         .name = "stb-image",
@@ -130,6 +117,18 @@ pub fn build(b: *std.Build) void {
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
 
+    // Tests
+    const tests = b.addTest(.{
+        // .root_module = exe_mod,
+        .root_source_file = b.path("src/tests.zig"),
+        .optimize = optimize,
+        .target = target,
+    });
+    tests.root_module.addImport("cli", cli_mod);
+    tests.root_module.addImport("exec", exec_mod);
+    const run_test_cmd = b.addRunArtifact(tests);
+    run_test_cmd.step.dependOn(b.getInstallStep());
+
     // Allows to add params to program when building: `zig build run -- arg1 arg2 etc`
     if (b.args) |args| {
         run_cmd.addArgs(args);
@@ -140,4 +139,7 @@ pub fn build(b: *std.Build) void {
     // This will evaluate the `run` step rather than the default, which is "install".
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&run_test_cmd.step);
 }

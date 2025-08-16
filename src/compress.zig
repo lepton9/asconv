@@ -312,3 +312,7 @@ pub fn comp_chunk(mat: [][]u32, row: u64, col: u64, h: u64, w: u64) u32 {
     }
     return @intCast(sum / (h * w));
 }
+
+pub fn load_image(filename: []const u8, nchannels: ?i32) !stb.ImageRaw {
+    return try stb.load_image(filename, nchannels);
+}
