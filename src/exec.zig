@@ -20,6 +20,7 @@ pub const ExecError = error{
     ParseErrorHeight,
     ParseErrorWidth,
     ParseErrorScale,
+    ParseErrorBrightness,
     DuplicateInput,
     NoInputFile,
     FetchError,

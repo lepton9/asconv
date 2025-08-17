@@ -61,6 +61,9 @@ fn handle_exec_error(err: result.ErrorWrap) void {
         exec.ExecError.ParseErrorScale => {
             std.log.err("Failed to parse scale '{s}'", .{err.get_ctx()});
         },
+        exec.ExecError.ParseErrorBrightness => {
+            std.log.err("Failed to parse brightness '{s}'", .{err.get_ctx()});
+        },
         exec.ExecError.DuplicateInput => {
             std.log.err("Multiple input files '{s}'", .{err.get_ctx()});
         },

@@ -64,6 +64,13 @@ pub const options = [_]Option{
         .arg_name = "float",
     },
     .{
+        .long_name = "brightness",
+        .short_name = "b",
+        .desc = "Set brightness boost",
+        .required = false,
+        .arg_name = "float",
+    },
+    .{
         .long_name = "reverse",
         .short_name = "r",
         .desc = "Reverse the charset",
