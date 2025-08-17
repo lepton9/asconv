@@ -16,6 +16,7 @@ pub const ResultImage = result.Result(ImageRaw, result.ErrorWrap);
 pub const ExecError = error{
     NoFileName,
     FileLoadError,
+    FileLoadErrorMem,
     ParseErrorHeight,
     ParseErrorWidth,
     ParseErrorScale,
@@ -48,7 +49,7 @@ fn write_to_stdio(data: []const u8) !void {
 }
 
 fn validate_url(uri: std.Uri) !void {
-    if (!std.mem.eql(u8, uri.scheme, "http") or
+    if (!std.mem.eql(u8, uri.scheme, "http") and
         !std.mem.eql(u8, uri.scheme, "https"))
     {
         return error.InvalidUrlScheme;
@@ -61,8 +62,19 @@ fn is_url(input: []const u8) !bool {
     return true;
 }
 
-fn fetch_url_content(_: std.mem.Allocator, _: []const u8) ![]const u8 {
-    return error.NotImplemented;
+fn fetch_url_content(allocator: std.mem.Allocator, url: []const u8) ![]const u8 {
+    var client = std.http.Client{ .allocator = allocator };
+    defer client.deinit();
+    var data = std.ArrayList(u8).init(allocator);
+
+    const res = try client.fetch(.{
+        .method = .GET,
+        .location = .{ .url = url },
+        .response_storage = .{ .dynamic = &data },
+    });
+
+    if (res.status != std.http.Status.ok) return ExecError.FetchError;
+    return data.toOwnedSlice();
 }
 
 fn get_input_image(allocator: std.mem.Allocator, cli_: *cli.Cli) ResultImage {
@@ -87,14 +99,14 @@ fn get_input_image(allocator: std.mem.Allocator, cli_: *cli.Cli) ResultImage {
     };
 
     if (input_url) {
-        const fetched_content = fetch_url_content(allocator, input.?) catch {
+        const fetched_content = fetch_url_content(allocator, input.?) catch |err| {
             return ResultImage.wrap_err(
-                result.ErrorWrap.create(ExecError.FetchError, "{s}", .{input.?}),
+                result.ErrorWrap.create(err, "{s}", .{input.?}),
             );
         };
         const raw_image = image.load_image_from_memory(fetched_content) catch {
             return ResultImage.wrap_err(
-                result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{input.?}),
+                result.ErrorWrap.create(ExecError.FileLoadErrorMem, "", .{}),
             );
         };
         return ResultImage.wrap_ok(raw_image);

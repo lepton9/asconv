@@ -49,6 +49,9 @@ fn handle_exec_error(err: result.ErrorWrap) void {
         exec.ExecError.FileLoadError => {
             std.log.err("Failed to load image '{s}'", .{err.get_ctx()});
         },
+        exec.ExecError.FileLoadErrorMem => {
+            std.log.err("Failed to load image from memory", .{});
+        },
         exec.ExecError.ParseErrorHeight => {
             std.log.err("Failed to parse height '{s}'", .{err.get_ctx()});
         },
