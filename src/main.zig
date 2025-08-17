@@ -58,6 +58,12 @@ fn handle_exec_error(err: result.ErrorWrap) void {
         exec.ExecError.ParseErrorScale => {
             std.log.err("Failed to parse scale '{s}'", .{err.get_ctx()});
         },
+        exec.ExecError.DuplicateInput => {
+            std.log.err("Multiple input files '{s}'", .{err.get_ctx()});
+        },
+        exec.ExecError.NoInputFile => {
+            std.log.err("No input file given", .{});
+        },
         else => {
             std.log.err("Error: '{s}'", .{err.get_ctx()});
         },

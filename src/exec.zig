@@ -6,9 +6,12 @@ const image = @import("img");
 const utils = @import("utils");
 const config = @import("config.zig");
 const Image = image.Image;
+const ImageRaw = image.ImageRaw;
 
 pub const commands = config.commands;
 pub const options = config.options;
+
+pub const ResultImage = result.Result(ImageRaw, result.ErrorWrap);
 
 pub const ExecError = error{
     NoFileName,
@@ -16,6 +19,8 @@ pub const ExecError = error{
     ParseErrorHeight,
     ParseErrorWidth,
     ParseErrorScale,
+    DuplicateInput,
+    NoInputFile,
 };
 
 fn output_file(cli_: *cli.Cli) ?[]const u8 {
@@ -60,12 +65,34 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     return null;
 }
 
-fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
-    const filename = cli_.global_args orelse {
-        return result.ErrorWrap.create(ExecError.NoFileName, "", .{});
+fn get_input_image(cli_: *cli.Cli) ResultImage {
+    var input: ?[]const u8 = null;
+    if (cli_.find_opt("input")) |opt_input| {
+        input = opt_input.arg_value.?;
+    }
+    if (cli_.global_args) |ga| {
+        if (input) |_| return ResultImage.wrap_err(
+            result.ErrorWrap.create(ExecError.DuplicateInput, "{s}", .{ga}),
+        );
+        input = ga;
+    }
+    if (input == null) return ResultImage.wrap_err(
+        result.ErrorWrap.create(ExecError.NoInputFile, "", .{}),
+    );
+
+    const raw_image = image.load_image(input.?, null) catch {
+        return ResultImage.wrap_err(
+            result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{input.?}),
+        );
     };
-    const raw_image = image.load_image(filename, null) catch {
-        return result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{filename});
+    return ResultImage.wrap_ok(raw_image);
+}
+
+fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
+    const filename = "";
+    const img_result = get_input_image(cli_);
+    const raw_image = img_result.unwrap_try() catch {
+        return img_result.unwrap_err();
     };
     var height: u32 = @intCast(raw_image.height);
     var width: u32 = @intCast(raw_image.width);

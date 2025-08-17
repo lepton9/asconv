@@ -4,6 +4,8 @@ const utils = @import("utils");
 const itof = utils.itof;
 const ftoi = utils.ftoi;
 
+pub const ImageRaw = stb.ImageRaw;
+
 const base_char_table = "@#%xo;:,. ";
 
 pub const AsciiCharInfo = struct { start: usize, len: u8 };
@@ -54,7 +56,7 @@ pub const Image = struct {
     height: u32,
     widht: u32,
     pixels: [][]u32,
-    raw_image: *stb.ImageRaw = undefined,
+    raw_image: *ImageRaw = undefined,
     ascii_info: ?*AsciiInfo = null,
     allocator: std.mem.Allocator,
 
@@ -68,8 +70,8 @@ pub const Image = struct {
             row.* = try allocator.alloc(u32, width);
             @memset(row.*, 0);
         }
-        img.raw_image = try allocator.create(stb.ImageRaw);
-        img.raw_image.* = stb.ImageRaw{};
+        img.raw_image = try allocator.create(ImageRaw);
+        img.raw_image.* = ImageRaw{};
         img.ascii_info = null;
         return img;
     }
@@ -101,7 +103,7 @@ pub const Image = struct {
         self.widht = width;
     }
 
-    pub fn set_raw_image(self: *Image, raw_image: stb.ImageRaw, filename: []const u8) void {
+    pub fn set_raw_image(self: *Image, raw_image: ImageRaw, filename: []const u8) void {
         if (!self.raw_image.empty()) {
             self.raw_image.deinit();
         }
@@ -272,7 +274,7 @@ fn pack_rgba(rgba: [4]u8) u32 {
         @as(u32, rgba[3]);
 }
 
-pub fn convert_to_pixel_matrix(allocator: *const std.mem.Allocator, image: *stb.ImageRaw) ![][]u32 {
+pub fn convert_to_pixel_matrix(allocator: *const std.mem.Allocator, image: *ImageRaw) ![][]u32 {
     const w: usize = @intCast(image.width);
     const h: usize = @intCast(image.height);
     const channels: usize = @intCast(image.nchan);
@@ -313,6 +315,6 @@ pub fn comp_chunk(mat: [][]u32, row: u64, col: u64, h: u64, w: u64) u32 {
     return @intCast(sum / (h * w));
 }
 
-pub fn load_image(filename: []const u8, nchannels: ?i32) !stb.ImageRaw {
+pub fn load_image(filename: []const u8, nchannels: ?i32) !ImageRaw {
     return try stb.load_image(filename, nchannels);
 }

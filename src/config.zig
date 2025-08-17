@@ -29,6 +29,13 @@ pub const commands = [_]Cmd{
 
 pub const options = [_]Option{
     .{
+        .long_name = "input",
+        .short_name = "i",
+        .desc = "Input file or url",
+        .required = false,
+        .arg_name = "path",
+    },
+    .{
         .long_name = "out",
         .short_name = "o",
         .desc = "Path of output file",
