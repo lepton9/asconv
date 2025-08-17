@@ -15,20 +15,20 @@ pub const AsciiInfo = struct {
     char_info: []AsciiCharInfo,
     len: u32,
 
-    pub fn init(allocator: *std.mem.Allocator, ascii_chars: []const u8) !*AsciiInfo {
+    pub fn init(allocator: std.mem.Allocator, ascii_chars: []const u8) !*AsciiInfo {
         var info = try allocator.create(AsciiInfo);
-        try info.set_charset(ascii_chars);
+        try info.set_charset(allocator, ascii_chars);
         return info;
     }
 
-    pub fn deinit(self: *AsciiInfo, allocator: *std.mem.Allocator) void {
+    pub fn deinit(self: *AsciiInfo, allocator: std.mem.Allocator) void {
+        allocator.free(self.char_info);
         allocator.destroy(self);
     }
 
-    pub fn set_charset(self: *AsciiInfo, ascii_chars: []const u8) !void {
-        const malloc = std.heap.page_allocator;
+    pub fn set_charset(self: *AsciiInfo, allocator: std.mem.Allocator, ascii_chars: []const u8) !void {
         self.char_table = ascii_chars;
-        var char_info = std.ArrayList(AsciiCharInfo).init(malloc);
+        var char_info = std.ArrayList(AsciiCharInfo).init(allocator);
         defer char_info.deinit();
         var i: usize = 0;
         while (i < ascii_chars.len) {
@@ -40,14 +40,43 @@ pub const AsciiInfo = struct {
         self.char_info = try char_info.toOwnedSlice();
     }
 
-    pub fn select_char(self: *AsciiInfo, index: u32) []const u8 {
+    pub fn select_char(self: *AsciiInfo, index: usize) []const u8 {
         const char_info: AsciiCharInfo = self.char_info[@min(index, self.char_info.len - 1)];
         return self.char_table[char_info.start .. char_info.start + char_info.len];
     }
+};
 
-    pub fn pixel_to_char(self: *AsciiInfo, pixel: u32) []const u8 {
-        const index: u32 = (gray_scale(pixel) * self.len) / 255;
-        return self.select_char(index);
+pub const Core = struct {
+    brightness: f32,
+    scale: f32,
+    ascii_info: *AsciiInfo,
+
+    pub fn init(allocator: std.mem.Allocator) !*Core {
+        const core = try allocator.create(Core);
+        core.* = .{
+            .brightness = 1.0,
+            .scale = 1.0,
+            .ascii_info = try AsciiInfo.init(allocator, base_char_table),
+        };
+        return core;
+    }
+
+    pub fn deinit(self: *Core, allocator: std.mem.Allocator) void {
+        self.ascii_info.deinit(allocator);
+    }
+
+    fn set_ascii_info(self: *Core, allocator: std.mem.Allocator, charset: []const u8) !void {
+        allocator.free(self.ascii_info.char_info);
+        try self.ascii_info.set_charset(allocator, charset);
+    }
+
+    pub fn pixel_to_char(self: *Core, pixel: u32) []const u8 {
+        const avg_brightness: usize = pixel_avg(pixel); // gray scale the pixel first
+        const boosted_brightness: usize = @intFromFloat(utils.itof(f32, avg_brightness) * self.brightness);
+        const clamped_brightness = std.math.clamp(boosted_brightness, 0, 255);
+        if (clamped_brightness == 0) return " ";
+        const index = (clamped_brightness * self.ascii_info.len) / 256;
+        return self.ascii_info.select_char(index);
     }
 };
 
@@ -57,7 +86,7 @@ pub const Image = struct {
     widht: u32,
     pixels: [][]u32,
     raw_image: *ImageRaw = undefined,
-    ascii_info: ?*AsciiInfo = null,
+    core: *Core = undefined,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, height: u32, width: u32) !*Image {
@@ -72,7 +101,6 @@ pub const Image = struct {
         }
         img.raw_image = try allocator.create(ImageRaw);
         img.raw_image.* = ImageRaw{};
-        img.ascii_info = null;
         return img;
     }
 
@@ -82,10 +110,9 @@ pub const Image = struct {
         }
         self.allocator.free(self.pixels);
         self.raw_image.deinit();
+        self.core.deinit(self.allocator);
+        self.allocator.destroy(self.core);
         self.allocator.destroy(self.raw_image);
-        if (self.ascii_info) |info| {
-            info.deinit(&self.allocator);
-        }
         self.allocator.destroy(self);
     }
 
@@ -112,10 +139,7 @@ pub const Image = struct {
     }
 
     pub fn set_ascii_info(self: *Image, charset: []const u8) !void {
-        if (self.ascii_info) |info| {
-            info.deinit(&self.allocator);
-        }
-        self.ascii_info = try AsciiInfo.init(&self.allocator, charset);
+        try self.core.set_ascii_info(self.allocator, charset);
     }
 
     fn compress_img(self: *Image) void {
@@ -145,14 +169,11 @@ pub const Image = struct {
     }
 
     fn pixel_char(self: *Image, pixel: u32) []const u8 {
-        if (self.ascii_info) |info| {
-            return info.pixel_to_char(pixel);
-        }
-        return pixel_to_char(pixel);
+        return self.core.pixel_to_char(pixel);
     }
 
     pub fn to_ascii(self: *Image) ![]const u8 {
-        var buffer = std.ArrayList(u8).init(std.heap.page_allocator);
+        var buffer = std.ArrayList(u8).init(self.allocator);
         defer buffer.deinit();
         for (self.pixels) |row| {
             for (row) |pixel| {
@@ -250,12 +271,6 @@ pub fn gray_scale(pixel: u32) u8 {
     const b_val: f32 = @floatFromInt(b(pixel));
     const val: f32 = 0.21 * r_val + 0.72 * g_val + 0.07 * b_val;
     return @intFromFloat(val);
-}
-
-pub fn pixel_to_char(pixel: u32) []const u8 {
-    const n: u32 = base_char_table.len;
-    const index = (gray_scale(pixel) * n) / 255;
-    return base_char_table[index .. index + 1];
 }
 
 fn unpack_rgba(pixel: u32) [4]u8 {

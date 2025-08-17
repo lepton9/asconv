@@ -154,6 +154,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     var width: u32 = @intCast(raw_image.width);
     const charset: []u8 = try allocator.dupe(u8, config.characters);
     defer allocator.free(charset);
+    var core = try image.Core.init(allocator);
 
     if (cli_.find_opt("height")) |opt_height| {
         height = std.fmt.parseInt(u32, opt_height.arg_value.?, 10) catch {
@@ -166,11 +167,16 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
         };
     }
     if (cli_.find_opt("scale")) |opt_scale| {
-        const scalar = std.fmt.parseFloat(f32, opt_scale.arg_value.?) catch {
+        core.scale = std.fmt.parseFloat(f32, opt_scale.arg_value.?) catch {
             return result.ErrorWrap.create(ExecError.ParseErrorScale, "{s}", .{opt_scale.arg_value.?});
         };
-        height = @intFromFloat(utils.itof(f32, height) * scalar);
-        width = @intFromFloat(utils.itof(f32, width) * scalar);
+        height = @intFromFloat(utils.itof(f32, height) * core.scale);
+        width = @intFromFloat(utils.itof(f32, width) * core.scale);
+    }
+    if (cli_.find_opt("brightness")) |opt_brightness| {
+        core.brightness = std.fmt.parseFloat(f32, opt_brightness.arg_value.?) catch {
+            return result.ErrorWrap.create(ExecError.ParseErrorBrightness, "{s}", .{opt_brightness.arg_value.?});
+        };
     }
     if (cli_.find_opt("reverse")) |_| {
         std.mem.reverse(u8, charset);
@@ -178,11 +184,13 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
 
     var img = try Image.init(allocator, height, width);
     defer Image.deinit(img);
+    img.core = core;
     img.set_raw_image(raw_image, filename);
     try img.set_ascii_info(charset);
     try img.fit_image();
 
     const data = try img.to_ascii();
+    defer allocator.free(data);
     const file = output_file(cli_);
     if (file) |path| {
         try write_to_file(path, data);
