@@ -64,6 +64,12 @@ fn handle_exec_error(err: result.ErrorWrap) void {
         exec.ExecError.NoInputFile => {
             std.log.err("No input file given", .{});
         },
+        exec.ExecError.FetchError => {
+            std.log.err("Failed to fetch image {s}", .{err.get_ctx()});
+        },
+        exec.ExecError.InvalidUrl => {
+            std.log.err("Invalid url {s}", .{err.get_ctx()});
+        },
         else => {
             std.log.err("Error: '{s}'", .{err.get_ctx()});
         },

@@ -318,3 +318,7 @@ pub fn comp_chunk(mat: [][]u32, row: u64, col: u64, h: u64, w: u64) u32 {
 pub fn load_image(filename: []const u8, nchannels: ?i32) !ImageRaw {
     return try stb.load_image(filename, nchannels);
 }
+
+pub fn load_image_from_memory(filename: []const u8) !ImageRaw {
+    return try stb.load_image_from_memory(filename);
+}

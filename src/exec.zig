@@ -21,6 +21,8 @@ pub const ExecError = error{
     ParseErrorScale,
     DuplicateInput,
     NoInputFile,
+    FetchError,
+    InvalidUrl,
 };
 
 fn output_file(cli_: *cli.Cli) ?[]const u8 {
@@ -45,6 +47,67 @@ fn write_to_stdio(data: []const u8) !void {
     try bw.flush();
 }
 
+fn validate_url(uri: std.Uri) !void {
+    if (!std.mem.eql(u8, uri.scheme, "http") or
+        !std.mem.eql(u8, uri.scheme, "https"))
+    {
+        return error.InvalidUrlScheme;
+    }
+}
+
+fn is_url(input: []const u8) !bool {
+    const uri = std.Uri.parse(input) catch return false;
+    try validate_url(uri);
+    return true;
+}
+
+fn fetch_url_content(_: std.mem.Allocator, _: []const u8) ![]const u8 {
+    return error.NotImplemented;
+}
+
+fn get_input_image(allocator: std.mem.Allocator, cli_: *cli.Cli) ResultImage {
+    var input: ?[]const u8 = null;
+    if (cli_.find_opt("input")) |opt_input| {
+        input = opt_input.arg_value.?;
+    }
+    if (cli_.global_args) |ga| {
+        if (input) |_| return ResultImage.wrap_err(
+            result.ErrorWrap.create(ExecError.DuplicateInput, "", .{}),
+        );
+        input = ga;
+    }
+    if (input == null) return ResultImage.wrap_err(
+        result.ErrorWrap.create(ExecError.NoInputFile, "", .{}),
+    );
+
+    const input_url = is_url(input.?) catch {
+        return ResultImage.wrap_err(
+            result.ErrorWrap.create(ExecError.InvalidUrl, "{s}", .{input.?}),
+        );
+    };
+
+    if (input_url) {
+        const fetched_content = fetch_url_content(allocator, input.?) catch {
+            return ResultImage.wrap_err(
+                result.ErrorWrap.create(ExecError.FetchError, "{s}", .{input.?}),
+            );
+        };
+        const raw_image = image.load_image_from_memory(fetched_content) catch {
+            return ResultImage.wrap_err(
+                result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{input.?}),
+            );
+        };
+        return ResultImage.wrap_ok(raw_image);
+    } else {
+        const raw_image = image.load_image(input.?, null) catch {
+            return ResultImage.wrap_err(
+                result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{input.?}),
+            );
+        };
+        return ResultImage.wrap_ok(raw_image);
+    }
+}
+
 fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
@@ -65,32 +128,9 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     return null;
 }
 
-fn get_input_image(cli_: *cli.Cli) ResultImage {
-    var input: ?[]const u8 = null;
-    if (cli_.find_opt("input")) |opt_input| {
-        input = opt_input.arg_value.?;
-    }
-    if (cli_.global_args) |ga| {
-        if (input) |_| return ResultImage.wrap_err(
-            result.ErrorWrap.create(ExecError.DuplicateInput, "{s}", .{ga}),
-        );
-        input = ga;
-    }
-    if (input == null) return ResultImage.wrap_err(
-        result.ErrorWrap.create(ExecError.NoInputFile, "", .{}),
-    );
-
-    const raw_image = image.load_image(input.?, null) catch {
-        return ResultImage.wrap_err(
-            result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{input.?}),
-        );
-    };
-    return ResultImage.wrap_ok(raw_image);
-}
-
 fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     const filename = "";
-    const img_result = get_input_image(cli_);
+    const img_result = get_input_image(allocator, cli_);
     const raw_image = img_result.unwrap_try() catch {
         return img_result.unwrap_err();
     };
