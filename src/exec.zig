@@ -26,6 +26,18 @@ pub const ExecError = error{
     InvalidUrl,
 };
 
+fn input_file(cli_: *cli.Cli) ![]const u8 {
+    var input: ?[]const u8 = null;
+    if (cli_.find_opt("input")) |opt_input| {
+        input = opt_input.arg_value.?;
+    }
+    if (cli_.global_args) |ga| {
+        if (input) |_| return ExecError.DuplicateInput;
+        input = ga;
+    }
+    return input orelse ExecError.NoInputFile;
+}
+
 fn output_file(cli_: *cli.Cli) ?[]const u8 {
     const option = cli_.find_opt("out");
     if (option) |opt| {
@@ -77,31 +89,17 @@ fn fetch_url_content(allocator: std.mem.Allocator, url: []const u8) ![]const u8 
     return data.toOwnedSlice();
 }
 
-fn get_input_image(allocator: std.mem.Allocator, cli_: *cli.Cli) ResultImage {
-    var input: ?[]const u8 = null;
-    if (cli_.find_opt("input")) |opt_input| {
-        input = opt_input.arg_value.?;
-    }
-    if (cli_.global_args) |ga| {
-        if (input) |_| return ResultImage.wrap_err(
-            result.ErrorWrap.create(ExecError.DuplicateInput, "", .{}),
-        );
-        input = ga;
-    }
-    if (input == null) return ResultImage.wrap_err(
-        result.ErrorWrap.create(ExecError.NoInputFile, "", .{}),
-    );
-
-    const input_url = is_url(input.?) catch {
+fn get_input_image(allocator: std.mem.Allocator, filepath: []const u8) ResultImage {
+    const input_url = is_url(filepath) catch {
         return ResultImage.wrap_err(
-            result.ErrorWrap.create(ExecError.InvalidUrl, "{s}", .{input.?}),
+            result.ErrorWrap.create(ExecError.InvalidUrl, "{s}", .{filepath}),
         );
     };
 
     if (input_url) {
-        const fetched_content = fetch_url_content(allocator, input.?) catch |err| {
+        const fetched_content = fetch_url_content(allocator, filepath) catch |err| {
             return ResultImage.wrap_err(
-                result.ErrorWrap.create(err, "{s}", .{input.?}),
+                result.ErrorWrap.create(err, "{s}", .{filepath}),
             );
         };
         const raw_image = image.load_image_from_memory(fetched_content) catch {
@@ -111,9 +109,9 @@ fn get_input_image(allocator: std.mem.Allocator, cli_: *cli.Cli) ResultImage {
         };
         return ResultImage.wrap_ok(raw_image);
     } else {
-        const raw_image = image.load_image(input.?, null) catch {
+        const raw_image = image.load_image(filepath, null) catch {
             return ResultImage.wrap_err(
-                result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{input.?}),
+                result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{filepath}),
             );
         };
         return ResultImage.wrap_ok(raw_image);
@@ -125,13 +123,16 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
 
-    const filename = cli_.global_args orelse "";
+    const filename = input_file(cli_) catch |err| {
+        return result.ErrorWrap.create(err, "{s}", .{cli_.global_args orelse ""});
+    };
     const img = try Image.init(allocator, 0, 0);
     defer Image.deinit(img);
-    img.raw_image.* = image.load_image(filename, null) catch {
-        return result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{filename});
-    };
-    img.name = filename;
+
+    const img_result = get_input_image(allocator, filename);
+    img.set_raw_image(img_result.unwrap_try() catch {
+        return img_result.unwrap_err();
+    }, filename);
 
     try stdout.print("Image: {s}\n", .{filename});
     try stdout.print("Size: {d}x{d}\n", .{ img.raw_image.width, img.raw_image.height });
@@ -141,8 +142,10 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
 }
 
 fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
-    const filename = "";
-    const img_result = get_input_image(allocator, cli_);
+    const filename = input_file(cli_) catch |err| {
+        return result.ErrorWrap.create(err, "{s}", .{cli_.global_args orelse ""});
+    };
+    const img_result = get_input_image(allocator, filename);
     const raw_image = img_result.unwrap_try() catch {
         return img_result.unwrap_err();
     };
