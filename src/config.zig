@@ -71,6 +71,13 @@ pub const options = [_]Option{
         .arg_name = "float",
     },
     .{
+        .long_name = "edges",
+        .short_name = "e",
+        .desc = "Edge detection",
+        .required = false,
+        .arg_name = null,
+    },
+    .{
         .long_name = "reverse",
         .short_name = "r",
         .desc = "Reverse the charset",

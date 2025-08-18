@@ -184,6 +184,9 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
             return result.ErrorWrap.create(ExecError.ParseErrorBrightness, "{s}", .{opt_brightness.arg_value.?});
         };
     }
+    if (cli_.find_opt("edges")) |_| {
+        core.edge_detection = true;
+    }
     if (cli_.find_opt("reverse")) |_| {
         std.mem.reverse(u8, charset);
     }
