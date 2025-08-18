@@ -195,6 +195,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     defer Image.deinit(img);
     img.core = core;
     try img.set_ascii_info(charset);
+    if (core.edge_detection) try img.set_edge_detection();
     img.set_raw_image(raw_image, filename);
     try img.fit_image();
 

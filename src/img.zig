@@ -60,6 +60,7 @@ pub const Core = struct {
             .scale = 1.0,
             .edge_detection = false,
             .edge_chars = "-/|\\",
+            // .edge_chars = "|/-\\",
             .ascii_info = try AsciiInfo.init(allocator, base_char_table),
         };
         return core;
@@ -84,7 +85,7 @@ const Edge = struct {
 pub const Image = struct {
     name: []const u8,
     height: u32,
-    widht: u32,
+    width: u32,
     pixels: [][]u32,
     raw_image: *ImageRaw = undefined,
     edges: ?[]Edge = null,
@@ -95,7 +96,7 @@ pub const Image = struct {
         var img = try allocator.create(Image);
         img.allocator = allocator;
         img.height = height;
-        img.widht = width;
+        img.width = width;
         img.edges = null;
         img.pixels = try allocator.alloc([]u32, height);
         for (img.pixels) |*row| {
@@ -132,8 +133,11 @@ pub const Image = struct {
             row.* = try self.allocator.alloc(u32, width);
             @memset(row.*, 0);
         }
+        if (self.edges) |*edges| {
+            edges = try self.allocator.realloc(edges, Edge, width * height);
+        }
         self.height = height;
-        self.widht = width;
+        self.width = width;
     }
 
     pub fn set_raw_image(self: *Image, raw_image: ImageRaw, filename: []const u8) void {
@@ -144,15 +148,13 @@ pub const Image = struct {
         self.name = filename;
     }
 
-    pub fn set_ascii_info(self: *Image, charset: []const u8) !void {
-        try self.core.set_ascii_info(self.allocator, charset);
+    pub fn set_edge_detection(self: *Image) !void {
+        self.core.edge_detection = true;
+        self.edges = try self.allocator.alloc(Edge, self.width * self.height);
     }
 
-    fn set_edges(self: *Image, edges: []Edge) void {
-        if (self.edges) |e| {
-            self.allocator.free(e);
-        }
-        self.edges = edges;
+    pub fn set_ascii_info(self: *Image, charset: []const u8) !void {
+        try self.core.set_ascii_info(self.allocator, charset);
     }
 
     pub fn fit_image(self: *Image) !void {
@@ -164,12 +166,11 @@ pub const Image = struct {
             self.pixels,
             @intCast(self.raw_image.width),
             @intCast(self.raw_image.height),
-            self.widht,
+            self.width,
             self.height,
         );
         if (self.core.edge_detection) {
-            const edges = try calc_edges(self.allocator, self.pixels, self.widht, self.height);
-            self.set_edges(edges);
+            try calc_edges(self.allocator, self.edges.?, self.pixels, self.width, self.height);
         }
     }
 
@@ -187,7 +188,7 @@ pub const Image = struct {
 
     fn get_char(self: *Image, x: usize, y: usize) []const u8 {
         if (self.core.edge_detection) {
-            if (edge_char(self.edges.?[y * self.widht + x], self.core.edge_chars)) |c| {
+            if (edge_char(self.edges.?[y * self.width + x], self.core.edge_chars)) |c| {
                 return c;
             }
         }
@@ -198,7 +199,7 @@ pub const Image = struct {
         var buffer = std.ArrayList(u8).init(self.allocator);
         defer buffer.deinit();
         for (0..self.height) |y| {
-            for (0..self.widht) |x| {
+            for (0..self.width) |x| {
                 const c: []const u8 = self.get_char(x, y);
                 try buffer.appendSlice(c);
                 try buffer.appendSlice(c);
@@ -384,13 +385,11 @@ fn edge_char(edge: Edge, edge_chars: []const u8) ?[]const u8 {
     if (edge.mag < threshold) {
         return null;
     }
-
     const deg = std.math.radiansToDegrees(edge.theta);
-    const norm = if (deg < 0) deg + 180 else deg;
     const ind: usize = blk: {
-        if (norm < 22.5 or norm >= 157.5) break :blk 0;
-        if (norm < 67.5) break :blk 1;
-        if (norm < 112.5) break :blk 2;
+        if (deg < 22.5 or deg >= 157.5) break :blk 0;
+        if (deg < 67.5) break :blk 1;
+        if (deg < 112.5) break :blk 2;
         break :blk 3;
     };
     return edge_chars[ind .. ind + 1];
@@ -398,22 +397,22 @@ fn edge_char(edge: Edge, edge_chars: []const u8) ?[]const u8 {
 
 fn calc_edges(
     allocator: std.mem.Allocator,
+    edges: []Edge,
     pixels: [][]u32,
     width: usize,
     height: usize,
-) ![]Edge {
+) !void {
     const gray = try gray_scale_image(allocator, pixels, width, height);
     defer allocator.free(gray);
-    return try sobel_op(allocator, gray, width, height);
+    return sobel_op(edges, gray, width, height);
 }
 
 fn sobel_op(
-    allocator: std.mem.Allocator,
+    edges: []Edge,
     gray: []u8,
     width: usize,
     height: usize,
-) ![]Edge {
-    var edges = try allocator.alloc(Edge, width * height);
+) !void {
     @memset(edges, Edge{ .gray = 0, .theta = 0, .mag = 0 });
 
     const Gx = [3][3]i32{ .{ -1, 0, 1 }, .{ -2, 0, 2 }, .{ -1, 0, 1 } };
@@ -427,19 +426,22 @@ fn sobel_op(
             inline for (0..3) |i| {
                 inline for (0..3) |j| {
                     const px = utils.itof(f32, gray[(y + i - 1) * width + (x + j - 1)]);
-                    gx += Gx[i][j] * @as(f32, px);
-                    gy += Gy[i][j] * @as(f32, px);
+                    gx += @as(f32, @floatFromInt(Gx[i][j])) * @as(f32, px);
+                    gy += @as(f32, @floatFromInt(Gy[i][j])) * @as(f32, px);
                 }
             }
 
             edges[y * width + x] = Edge{
                 .gray = gray[y * width + x],
                 .mag = std.math.sqrt(gx * gx + gy * gy),
-                .theta = std.math.atan2(gy, gx),
+                .theta = blk: {
+                    var t = std.math.atan2(-gy, gx) + std.math.pi / 2.0;
+                    if (t < 0) t += std.math.pi;
+                    break :blk @mod(t, std.math.pi);
+                },
             };
         }
     }
-    return edges;
 }
 
 pub fn load_image(filename: []const u8, nchannels: ?i32) !ImageRaw {
