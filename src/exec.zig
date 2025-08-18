@@ -120,14 +120,11 @@ fn get_input_image(allocator: std.mem.Allocator, filepath: []const u8) ResultIma
 }
 
 fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-
     const filename = input_file(cli_) catch |err| {
         return result.ErrorWrap.create(err, "{s}", .{cli_.global_args orelse ""});
     };
     const img = try Image.init(allocator, 0, 0);
+    img.core = try image.Core.init(allocator);
     defer Image.deinit(img);
 
     const img_result = get_input_image(allocator, filename);
@@ -135,10 +132,19 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
         return img_result.unwrap_err();
     }, filename);
 
-    try stdout.print("Image: {s}\n", .{filename});
-    try stdout.print("Size: {d}x{d}\n", .{ img.raw_image.width, img.raw_image.height });
-    try stdout.print("Channels: {d}\n", .{img.raw_image.nchan});
-    try bw.flush();
+    var buffer: [256]u8 = undefined;
+    var buf = std.ArrayList(u8).init(allocator);
+    defer buf.deinit();
+    try buf.appendSlice(try std.fmt.bufPrint(&buffer, "Image: {s}\n", .{filename}));
+    try buf.appendSlice(try std.fmt.bufPrint(
+        &buffer,
+        "Size: {d}x{d}\n",
+        .{ img.raw_image.width, img.raw_image.height },
+    ));
+    try buf.appendSlice(
+        try std.fmt.bufPrint(&buffer, "Channels: {d}\n", .{img.raw_image.nchan}),
+    );
+    try write_to_stdio(buf.items);
     return null;
 }
 
@@ -185,8 +191,8 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     var img = try Image.init(allocator, height, width);
     defer Image.deinit(img);
     img.core = core;
-    img.set_raw_image(raw_image, filename);
     try img.set_ascii_info(charset);
+    img.set_raw_image(raw_image, filename);
     try img.fit_image();
 
     const data = try img.to_ascii();
@@ -200,6 +206,16 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     return null;
 }
 
+fn help(allocator: std.mem.Allocator, args_struct: *cmd.ArgsStructure) !void {
+    var buf = std.ArrayList(u8).init(allocator);
+    defer buf.deinit();
+    try buf.appendSlice("Usage: asconv [command] [options]\n\n");
+    const args = try args_struct.args_structure_string(allocator);
+    defer allocator.free(args);
+    try buf.appendSlice(args);
+    try write_to_stdio(buf.items);
+}
+
 pub fn cmd_func(allocator: std.mem.Allocator, cli_: *cli.Cli, args_struct: *cmd.ArgsStructure) !?result.ErrorWrap {
     if (cli_.cmd == null) {
         std.log.info("No command", .{});
@@ -210,8 +226,10 @@ pub fn cmd_func(allocator: std.mem.Allocator, cli_: *cli.Cli, args_struct: *cmd.
         return try size(allocator, cli_);
     } else if (std.mem.eql(u8, cmd_name, "ascii")) {
         return try ascii(allocator, cli_);
-    } else if (std.mem.eql(u8, cmd_name, "compress")) {} else if (std.mem.eql(u8, cmd_name, "help")) {
-        args_struct.print_commands();
+    } else if (std.mem.eql(u8, cmd_name, "compress")) {
+        return null;
+    } else if (std.mem.eql(u8, cmd_name, "help")) {
+        return try help(allocator, args_struct);
     }
     return null;
 }

@@ -71,11 +71,14 @@ pub const Core = struct {
     }
 
     pub fn pixel_to_char(self: *Core, pixel: u32) []const u8 {
-        const avg_brightness: usize = pixel_avg(pixel); // gray scale the pixel first
-        const boosted_brightness: usize = @intFromFloat(utils.itof(f32, avg_brightness) * self.brightness);
-        const clamped_brightness = std.math.clamp(boosted_brightness, 0, 255);
-        if (clamped_brightness == 0) return " ";
-        const index = (clamped_brightness * self.ascii_info.len) / 256;
+        const avg: usize = pixel_avg(pixel);
+        const brightness: usize = std.math.clamp(
+            utils.ftoi(usize, (utils.itof(f32, avg) * self.brightness)),
+            0,
+            255,
+        );
+        if (brightness == 0) return " ";
+        const index = (brightness * self.ascii_info.len) / 256;
         return self.ascii_info.select_char(index);
     }
 };
