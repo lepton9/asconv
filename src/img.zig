@@ -47,15 +47,19 @@ pub const AsciiInfo = struct {
 };
 
 pub const Core = struct {
+    ascii_info: *AsciiInfo,
+    edge_chars: []const u8,
     brightness: f32,
     scale: f32,
-    ascii_info: *AsciiInfo,
+    edge_detection: bool,
 
     pub fn init(allocator: std.mem.Allocator) !*Core {
         const core = try allocator.create(Core);
         core.* = .{
             .brightness = 1.0,
             .scale = 1.0,
+            .edge_detection = false,
+            .edge_chars = "-/|\\",
             .ascii_info = try AsciiInfo.init(allocator, base_char_table),
         };
         return core;
@@ -69,18 +73,12 @@ pub const Core = struct {
         allocator.free(self.ascii_info.char_info);
         try self.ascii_info.set_charset(allocator, charset);
     }
+};
 
-    pub fn pixel_to_char(self: *Core, pixel: u32) []const u8 {
-        const avg: usize = pixel_avg(pixel);
-        const brightness: usize = std.math.clamp(
-            utils.ftoi(usize, (utils.itof(f32, avg) * self.brightness)),
-            0,
-            255,
-        );
-        if (brightness == 0) return " ";
-        const index = (brightness * self.ascii_info.len) / 256;
-        return self.ascii_info.select_char(index);
-    }
+const Edge = struct {
+    gray: u8,
+    mag: f32,
+    theta: f32,
 };
 
 pub const Image = struct {
@@ -89,6 +87,7 @@ pub const Image = struct {
     widht: u32,
     pixels: [][]u32,
     raw_image: *ImageRaw = undefined,
+    edges: ?[]Edge = null,
     core: *Core = undefined,
     allocator: std.mem.Allocator,
 
@@ -97,6 +96,7 @@ pub const Image = struct {
         img.allocator = allocator;
         img.height = height;
         img.widht = width;
+        img.edges = null;
         img.pixels = try allocator.alloc([]u32, height);
         for (img.pixels) |*row| {
             row.* = try allocator.alloc(u32, width);
@@ -108,6 +108,9 @@ pub const Image = struct {
     }
 
     pub fn deinit(self: *Image) void {
+        if (self.edges) |edges| {
+            self.allocator.free(edges);
+        }
         for (self.pixels) |row| {
             self.allocator.free(row);
         }
@@ -145,16 +148,11 @@ pub const Image = struct {
         try self.core.set_ascii_info(self.allocator, charset);
     }
 
-    fn compress_img(self: *Image) void {
-        const chunk_h: u32 = @max(@as(u32, @intCast(self.raw_image.height)) / self.height, 1);
-        const chunk_w: u32 = @max(@as(u32, @intCast(self.raw_image.width)) / self.widht, 1);
-        const pixels: [][]u32 = convert_to_pixel_matrix(self.allocator, self.raw_image) catch return;
-        defer free_pixel_mat(pixels, self.allocator);
-        for (0..self.height) |r_i| {
-            for (0..self.widht) |c_i| {
-                self.pixels[r_i][c_i] = comp_chunk(pixels, r_i * chunk_h, c_i * chunk_w, chunk_h, chunk_w);
-            }
+    fn set_edges(self: *Image, edges: []Edge) void {
+        if (self.edges) |e| {
+            self.allocator.free(e);
         }
+        self.edges = edges;
     }
 
     pub fn fit_image(self: *Image) !void {
@@ -169,18 +167,39 @@ pub const Image = struct {
             self.widht,
             self.height,
         );
+        if (self.core.edge_detection) {
+            const edges = try calc_edges(self.allocator, self.pixels, self.widht, self.height);
+            self.set_edges(edges);
+        }
     }
 
-    fn pixel_char(self: *Image, pixel: u32) []const u8 {
-        return self.core.pixel_to_char(pixel);
+    fn pixel_to_char(self: *Image, pixel: u32) []const u8 {
+        const avg: usize = pixel_avg(pixel);
+        const brightness: usize = std.math.clamp(
+            utils.ftoi(usize, (utils.itof(f32, avg) * self.core.brightness)),
+            0,
+            255,
+        );
+        if (brightness == 0) return " ";
+        const index = (brightness * self.core.ascii_info.len) / 256;
+        return self.core.ascii_info.select_char(index);
+    }
+
+    fn get_char(self: *Image, x: usize, y: usize) []const u8 {
+        if (self.core.edge_detection) {
+            if (edge_char(self.edges.?[y * self.widht + x], self.core.edge_chars)) |c| {
+                return c;
+            }
+        }
+        return self.pixel_to_char(self.pixels[y][x]);
     }
 
     pub fn to_ascii(self: *Image) ![]const u8 {
         var buffer = std.ArrayList(u8).init(self.allocator);
         defer buffer.deinit();
-        for (self.pixels) |row| {
-            for (row) |pixel| {
-                const c: []const u8 = self.pixel_char(pixel);
+        for (0..self.height) |y| {
+            for (0..self.widht) |x| {
+                const c: []const u8 = self.get_char(x, y);
                 try buffer.appendSlice(c);
                 try buffer.appendSlice(c);
             }
@@ -352,12 +371,40 @@ fn gray_scale_image(
     height: usize,
 ) ![]u8 {
     var gray = try allocator.alloc(u8, width * height);
-    for (1..height - 1) |y| {
-        for (1..width - 1) |x| {
+    for (1..height) |y| {
+        for (1..width) |x| {
             gray[y * width + x] = gray_scale_avg(pixels[y][x]);
         }
     }
     return gray;
+}
+
+fn edge_char(edge: Edge, edge_chars: []const u8) ?[]const u8 {
+    const threshold: f32 = 50;
+    if (edge.mag < threshold) {
+        return null;
+    }
+
+    const deg = std.math.radiansToDegrees(edge.theta);
+    const norm = if (deg < 0) deg + 180 else deg;
+    const ind: usize = blk: {
+        if (norm < 22.5 or norm >= 157.5) break :blk 0;
+        if (norm < 67.5) break :blk 1;
+        if (norm < 112.5) break :blk 2;
+        break :blk 3;
+    };
+    return edge_chars[ind .. ind + 1];
+}
+
+fn calc_edges(
+    allocator: std.mem.Allocator,
+    pixels: [][]u32,
+    width: usize,
+    height: usize,
+) ![]Edge {
+    const gray = try gray_scale_image(allocator, pixels, width, height);
+    defer allocator.free(gray);
+    return try sobel_op(allocator, gray, width, height);
 }
 
 fn sobel_op(
