@@ -148,8 +148,8 @@ pub const Image = struct {
     fn compress_img(self: *Image) void {
         const chunk_h: u32 = @max(@as(u32, @intCast(self.raw_image.height)) / self.height, 1);
         const chunk_w: u32 = @max(@as(u32, @intCast(self.raw_image.width)) / self.widht, 1);
-        const pixels: [][]u32 = convert_to_pixel_matrix(&std.heap.page_allocator, self.raw_image) catch return;
-        defer free_pixel_mat(pixels, &std.heap.page_allocator);
+        const pixels: [][]u32 = convert_to_pixel_matrix(self.allocator, self.raw_image) catch return;
+        defer free_pixel_mat(pixels, self.allocator);
         for (0..self.height) |r_i| {
             for (0..self.widht) |c_i| {
                 self.pixels[r_i][c_i] = comp_chunk(pixels, r_i * chunk_h, c_i * chunk_w, chunk_h, chunk_w);
@@ -159,8 +159,8 @@ pub const Image = struct {
 
     pub fn fit_image(self: *Image) !void {
         if (self.raw_image.data == null) return error.NoImageData;
-        const pixels: [][]u32 = try convert_to_pixel_matrix(&std.heap.page_allocator, self.raw_image);
-        defer free_pixel_mat(pixels, &std.heap.page_allocator);
+        const pixels: [][]u32 = try convert_to_pixel_matrix(self.allocator, self.raw_image);
+        defer free_pixel_mat(pixels, self.allocator);
         scale_nearest(
             pixels,
             self.pixels,
@@ -268,7 +268,19 @@ pub fn pixel_avg(pixel: u32) u8 {
     return @truncate((@as(u16, r_value) + @as(u16, g_value) + @as(u16, b_value)) / 3);
 }
 
-pub fn gray_scale(pixel: u32) u8 {
+pub fn gray_scale(pixel: u32) u32 {
+    const r_val: f32 = @floatFromInt(r(pixel));
+    const g_val: f32 = @floatFromInt(g(pixel));
+    const b_val: f32 = @floatFromInt(b(pixel));
+    return pack_rgba(.{
+        @intFromFloat(r_val * 0.21),
+        @intFromFloat(g_val * 0.72),
+        @intFromFloat(b_val * 0.07),
+        a(pixel),
+    });
+}
+
+pub fn gray_scale_avg(pixel: u32) u8 {
     const r_val: f32 = @floatFromInt(r(pixel));
     const g_val: f32 = @floatFromInt(g(pixel));
     const b_val: f32 = @floatFromInt(b(pixel));
@@ -292,7 +304,7 @@ fn pack_rgba(rgba: [4]u8) u32 {
         @as(u32, rgba[3]);
 }
 
-pub fn convert_to_pixel_matrix(allocator: *const std.mem.Allocator, image: *ImageRaw) ![][]u32 {
+pub fn convert_to_pixel_matrix(allocator: std.mem.Allocator, image: *ImageRaw) ![][]u32 {
     const w: usize = @intCast(image.width);
     const h: usize = @intCast(image.height);
     const channels: usize = @intCast(image.nchan);
@@ -313,7 +325,7 @@ pub fn convert_to_pixel_matrix(allocator: *const std.mem.Allocator, image: *Imag
     return pixels;
 }
 
-pub fn free_pixel_mat(pixels: [][]u32, allocator: *const std.mem.Allocator) void {
+pub fn free_pixel_mat(pixels: [][]u32, allocator: std.mem.Allocator) void {
     for (pixels) |row| allocator.free(row);
     allocator.free(pixels);
 }
@@ -331,6 +343,21 @@ pub fn comp_chunk(mat: [][]u32, row: u64, col: u64, h: u64, w: u64) u32 {
         }
     }
     return @intCast(sum / (h * w));
+}
+
+fn gray_scale_image(
+    allocator: std.mem.Allocator,
+    pixels: [][]u32,
+    width: usize,
+    height: usize,
+) ![]u8 {
+    var gray = try allocator.alloc(u8, width * height);
+    for (1..height - 1) |y| {
+        for (1..width - 1) |x| {
+            gray[y * width + x] = gray_scale_avg(pixels[y][x]);
+        }
+    }
+    return gray;
 }
 
 pub fn load_image(filename: []const u8, nchannels: ?i32) !ImageRaw {

@@ -229,7 +229,7 @@ pub fn cmd_func(allocator: std.mem.Allocator, cli_: *cli.Cli, args_struct: *cmd.
     } else if (std.mem.eql(u8, cmd_name, "compress")) {
         return null;
     } else if (std.mem.eql(u8, cmd_name, "help")) {
-        return try help(allocator, args_struct);
+        try help(allocator, args_struct);
     }
     return null;
 }
