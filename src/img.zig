@@ -360,6 +360,41 @@ fn gray_scale_image(
     return gray;
 }
 
+fn sobel_op(
+    allocator: std.mem.Allocator,
+    gray: []u8,
+    width: usize,
+    height: usize,
+) ![]Edge {
+    var edges = try allocator.alloc(Edge, width * height);
+    @memset(edges, Edge{ .gray = 0, .theta = 0, .mag = 0 });
+
+    const Gx = [3][3]i32{ .{ -1, 0, 1 }, .{ -2, 0, 2 }, .{ -1, 0, 1 } };
+    const Gy = [3][3]i32{ .{ -1, -2, -1 }, .{ 0, 0, 0 }, .{ 1, 2, 1 } };
+
+    for (1..height - 1) |y| {
+        for (1..width - 1) |x| {
+            var gx: f32 = 0;
+            var gy: f32 = 0;
+
+            inline for (0..3) |i| {
+                inline for (0..3) |j| {
+                    const px = utils.itof(f32, gray[(y + i - 1) * width + (x + j - 1)]);
+                    gx += Gx[i][j] * @as(f32, px);
+                    gy += Gy[i][j] * @as(f32, px);
+                }
+            }
+
+            edges[y * width + x] = Edge{
+                .gray = gray[y * width + x],
+                .mag = std.math.sqrt(gx * gx + gy * gy),
+                .theta = std.math.atan2(gy, gx),
+            };
+        }
+    }
+    return edges;
+}
+
 pub fn load_image(filename: []const u8, nchannels: ?i32) !ImageRaw {
     return try stb.load_image(filename, nchannels);
 }
