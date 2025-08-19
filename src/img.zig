@@ -444,6 +444,29 @@ fn sobel_op(
     }
 }
 
+fn gaussian_kernel(allocator: std.mem.Allocator) ![]f32 {
+    const kernel_size: usize = 5;
+    var kernel = try allocator.alloc(f32, kernel_size * kernel_size);
+
+    const sigma: f32 = 1.0;
+    const s: f32 = 2.0 * sigma * sigma;
+    var sum: f32 = 0.0;
+
+    for (0..kernel_size) |i| {
+        for (0..kernel_size) |j| {
+            const center: f32 = @floatFromInt((kernel_size - 1) / 2);
+            const x: f32 = @as(f32, @floatFromInt(i)) - center;
+            const y: f32 = @as(f32, @floatFromInt(j)) - center;
+            kernel[i * kernel_size + j] = @exp(((x * x + y * y) / s) * (-1)) / std.math.pi * s;
+            sum += kernel[i * kernel_size + j];
+        }
+    }
+    for (0..kernel_size * kernel_size) |i| {
+        kernel[i] /= sum;
+    }
+    return kernel;
+}
+
 pub fn load_image(filename: []const u8, nchannels: ?i32) !ImageRaw {
     return try stb.load_image(filename, nchannels);
 }
