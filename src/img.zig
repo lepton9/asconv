@@ -53,6 +53,7 @@ pub const Core = struct {
     brightness: f32,
     scale: f32,
     edge_detection: bool,
+    edge_alg: EdgeDetectionAlg,
 
     pub fn init(allocator: std.mem.Allocator) !*Core {
         const core = try allocator.create(Core);
@@ -60,8 +61,8 @@ pub const Core = struct {
             .brightness = 1.0,
             .scale = 1.0,
             .edge_detection = false,
+            .edge_alg = .Sobel,
             .edge_chars = "-/|\\",
-            // .edge_chars = "|/-\\",
             .ascii_info = try AsciiInfo.init(allocator, base_char_table),
         };
         return core;
@@ -81,6 +82,12 @@ const Edge = struct {
     gray: u8,
     mag: f32,
     theta: f32,
+};
+
+const EdgeDetectionAlg = enum {
+    Sobel,
+    LoG, // Laplacian of Gaussian
+    DoG, // Difference of Gaussian
 };
 
 pub const Image = struct {
@@ -171,7 +178,14 @@ pub const Image = struct {
             self.height,
         );
         if (self.core.edge_detection) {
-            try calc_edges(self.allocator, self.edges.?, self.pixels, self.width, self.height);
+            try calc_edges(
+                self.allocator,
+                self.core.edge_alg,
+                self.edges.?,
+                self.pixels,
+                self.width,
+                self.height,
+            );
         }
     }
 
@@ -351,22 +365,7 @@ pub fn free_pixel_mat(pixels: [][]u32, allocator: std.mem.Allocator) void {
     allocator.free(pixels);
 }
 
-pub fn comp_chunk(mat: [][]u32, row: u64, col: u64, h: u64, w: u64) u32 {
-    if (h == 0 or w == 0) return 0;
-    var sum: u64 = 0;
-    const max_height: u64 = @as(u64, @intCast(mat.len)) - row;
-    const max_width: u64 = @as(u64, @intCast(mat[0].len)) - col;
-    const iter_height = if (h < max_height) h else max_height;
-    const iter_width = if (w < max_width) w else max_width;
-    for (0..iter_height) |i| {
-        for (0..iter_width) |j| {
-            sum += mat[row + i][col + j];
-        }
-    }
-    return @intCast(sum / (h * w));
-}
-
-fn gray_scale_image(
+fn gray_scale_filter(
     allocator: std.mem.Allocator,
     pixels: [][]u32,
     width: usize,
@@ -398,22 +397,35 @@ fn edge_char(edge: Edge, edge_chars: []const u8) ?[]const u8 {
 
 fn calc_edges(
     allocator: std.mem.Allocator,
+    edge_alg: EdgeDetectionAlg,
     edges: []Edge,
     pixels: [][]u32,
     width: usize,
     height: usize,
 ) !void {
-    const gray = try gray_scale_image(allocator, pixels, width, height);
+    const gray = try gray_scale_filter(allocator, pixels, width, height);
     defer allocator.free(gray);
-    return sobel_op(edges, gray, width, height);
+    switch (edge_alg) {
+        .Sobel => {
+            return sobel_filter(edges, gray, width, height);
+        },
+        .LoG => {
+            return laplacian_filter(edges, gray, width, height);
+        },
+        .DoG => {
+            // const smooth = try allocator.alloc(u8, width * height);
+            // defer allocator.free(smooth);
+            // gaussian_smoothing(gray, smooth, width, height);
+        },
+    }
 }
 
-fn sobel_op(
+fn sobel_filter(
     edges: []Edge,
     img: []u8,
     width: usize,
     height: usize,
-) !void {
+) void {
     @memset(edges, Edge{ .gray = 0, .theta = 0, .mag = 0 });
 
     const Gx = [3][3]i32{ .{ -1, 0, 1 }, .{ -2, 0, 2 }, .{ -1, 0, 1 } };
