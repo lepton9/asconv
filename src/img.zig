@@ -6,7 +6,7 @@ const ftoi = utils.ftoi;
 
 pub const ImageRaw = stb.ImageRaw;
 
-const gaussian_kernel_size: usize = 5;
+const gaussian_sigma: f32 = 1.0;
 const base_char_table = "@#%xo;:,. ";
 
 pub const AsciiCharInfo = struct { start: usize, len: u8 };
@@ -446,9 +446,10 @@ fn sobel_op(
 }
 
 fn gaussian_kernel(
-    comptime kernel_size: usize,
     comptime sigma: f32,
-) [kernel_size * kernel_size]f32 {
+) []f32 {
+    const size: i32 = @intFromFloat(sigma * 6);
+    const kernel_size = if (size % 2 == 0) size + 1 else size;
     var kernel: [kernel_size * kernel_size]f32 = undefined;
     const center: f32 = @floatFromInt((kernel_size - 1) / 2);
     const s: f32 = 2.0 * sigma * sigma;
@@ -464,7 +465,7 @@ fn gaussian_kernel(
     for (0..kernel_size * kernel_size) |i| {
         kernel[i] /= sum;
     }
-    return kernel;
+    return &kernel;
 }
 
 fn gaussian_smoothing(
@@ -473,13 +474,14 @@ fn gaussian_smoothing(
     width: usize,
     height: usize,
 ) void {
-    const kernel = gaussian_kernel(gaussian_kernel_size, 1);
-    const center: i32 = @as(i32, gaussian_kernel_size / 2);
+    const kernel = gaussian_kernel(gaussian_sigma);
+    const kernel_size: usize = @intCast(std.math.sqrt(kernel.len));
+    const center: i32 = @as(i32, @intCast(kernel_size / 2));
     for (0..height) |y| {
         for (0..width) |x| {
             var sum: f32 = 0;
-            inline for (0..gaussian_kernel_size) |ky| {
-                inline for (0..gaussian_kernel_size) |kx| {
+            for (0..kernel_size) |ky| {
+                for (0..kernel_size) |kx| {
                     const ix: i32 = @as(i32, @intCast(x)) + @as(i32, @intCast(kx)) - center;
                     const iy: i32 = @as(i32, @intCast(y)) + @as(i32, @intCast(ky)) - center;
 
@@ -490,11 +492,11 @@ fn gaussian_smoothing(
                             f32,
                             @floatFromInt(img[@intCast(iy * @as(i32, @intCast(width)) + ix)]),
                         );
-                        sum += pixel * kernel[ky * gaussian_kernel_size + kx];
+                        sum += pixel * kernel[ky * kernel_size + kx];
                     }
                 }
             }
-            output[y * width + x] = @intFromFloat(sum);
+            output[y * width + x] = @intFromFloat(std.math.clamp(sum, 0.0, 255.0));
         }
     }
 }
