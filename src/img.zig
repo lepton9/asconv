@@ -403,6 +403,7 @@ fn calc_edges(
     width: usize,
     height: usize,
 ) !void {
+    @memset(edges, Edge{ .gray = 0, .theta = 0, .mag = 0 });
     const gray = try gray_scale_filter(allocator, pixels, width, height);
     defer allocator.free(gray);
     switch (edge_alg) {
@@ -426,8 +427,6 @@ fn sobel_filter(
     width: usize,
     height: usize,
 ) void {
-    @memset(edges, Edge{ .gray = 0, .theta = 0, .mag = 0 });
-
     const Gx = [3][3]i32{ .{ -1, 0, 1 }, .{ -2, 0, 2 }, .{ -1, 0, 1 } };
     const Gy = [3][3]i32{ .{ -1, -2, -1 }, .{ 0, 0, 0 }, .{ 1, 2, 1 } };
 
