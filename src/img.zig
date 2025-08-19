@@ -6,6 +6,7 @@ const ftoi = utils.ftoi;
 
 pub const ImageRaw = stb.ImageRaw;
 
+const gaussian_kernel_size: usize = 5;
 const base_char_table = "@#%xo;:,. ";
 
 pub const AsciiCharInfo = struct { start: usize, len: u8 };
@@ -409,7 +410,7 @@ fn calc_edges(
 
 fn sobel_op(
     edges: []Edge,
-    gray: []u8,
+    img: []u8,
     width: usize,
     height: usize,
 ) !void {
@@ -425,14 +426,14 @@ fn sobel_op(
 
             inline for (0..3) |i| {
                 inline for (0..3) |j| {
-                    const px = utils.itof(f32, gray[(y + i - 1) * width + (x + j - 1)]);
+                    const px = utils.itof(f32, img[(y + i - 1) * width + (x + j - 1)]);
                     gx += @as(f32, @floatFromInt(Gx[i][j])) * @as(f32, px);
                     gy += @as(f32, @floatFromInt(Gy[i][j])) * @as(f32, px);
                 }
             }
 
             edges[y * width + x] = Edge{
-                .gray = gray[y * width + x],
+                .gray = img[y * width + x],
                 .mag = std.math.sqrt(gx * gx + gy * gy),
                 .theta = blk: {
                     var t = std.math.atan2(-gy, gx) + std.math.pi / 2.0;
@@ -456,7 +457,7 @@ fn gaussian_kernel(
         for (0..kernel_size) |j| {
             const x: f32 = @as(f32, @floatFromInt(i)) - center;
             const y: f32 = @as(f32, @floatFromInt(j)) - center;
-            kernel[i * kernel_size + j] = @exp(((x * x + y * y) / s) * (-1)) / std.math.pi * s;
+            kernel[i * kernel_size + j] = @exp(((x * x + y * y) / s) * (-1)) / (std.math.pi * s);
             sum += kernel[i * kernel_size + j];
         }
     }
@@ -464,6 +465,38 @@ fn gaussian_kernel(
         kernel[i] /= sum;
     }
     return kernel;
+}
+
+fn gaussian_smoothing(
+    img: []u8,
+    output: []u8,
+    width: usize,
+    height: usize,
+) void {
+    const kernel = gaussian_kernel(gaussian_kernel_size, 1);
+    const center: i32 = @as(i32, gaussian_kernel_size / 2);
+    for (0..height) |y| {
+        for (0..width) |x| {
+            var sum: f32 = 0;
+            inline for (0..gaussian_kernel_size) |ky| {
+                inline for (0..gaussian_kernel_size) |kx| {
+                    const ix: i32 = @as(i32, @intCast(x)) + @as(i32, @intCast(kx)) - center;
+                    const iy: i32 = @as(i32, @intCast(y)) + @as(i32, @intCast(ky)) - center;
+
+                    if (ix >= 0 and iy >= 0 and
+                        ix < @as(i32, @intCast(width)) and iy < @as(i32, @intCast(height)))
+                    {
+                        const pixel: f32 = @as(
+                            f32,
+                            @floatFromInt(img[@intCast(iy * @as(i32, @intCast(width)) + ix)]),
+                        );
+                        sum += pixel * kernel[ky * gaussian_kernel_size + kx];
+                    }
+                }
+            }
+            output[y * width + x] = @intFromFloat(sum);
+        }
+    }
 }
 
 pub fn load_image(filename: []const u8, nchannels: ?i32) !ImageRaw {
