@@ -78,10 +78,37 @@ pub const Core = struct {
     }
 };
 
-const Edge = struct {
-    gray: u8,
-    mag: f32,
-    theta: f32,
+const EdgeData = struct {
+    img: []u8,
+    mag: []f32,
+    theta: []f32,
+
+    fn init(allocator: std.mem.Allocator, height: u32, width: u32) !EdgeData {
+        const edges: EdgeData = .{
+            .img = try allocator.alloc(u8, width * height),
+            .mag = try allocator.alloc(f32, width * height),
+            .theta = try allocator.alloc(f32, width * height),
+        };
+        return edges;
+    }
+
+    fn deinit(self: EdgeData, allocator: std.mem.Allocator) void {
+        allocator.free(self.img);
+        allocator.free(self.mag);
+        allocator.free(self.theta);
+    }
+
+    fn resize(self: EdgeData, allocator: std.mem.Allocator, height: u32, width: u32) !void {
+        self.img = try allocator.realloc(self.img, u8, width * height);
+        self.mag = try allocator.realloc(self.mag, f32, width * height);
+        self.theta = try allocator.realloc(self.theta, f32, width * height);
+    }
+
+    fn reset(self: EdgeData) void {
+        @memset(self.img, 0);
+        @memset(self.mag, 0);
+        @memset(self.theta, 0);
+    }
 };
 
 const EdgeDetectionAlg = enum {
@@ -96,7 +123,7 @@ pub const Image = struct {
     width: u32,
     pixels: [][]u32,
     raw_image: *ImageRaw = undefined,
-    edges: ?[]Edge = null,
+    edges: ?EdgeData = null,
     core: *Core = undefined,
     allocator: std.mem.Allocator,
 
@@ -118,7 +145,7 @@ pub const Image = struct {
 
     pub fn deinit(self: *Image) void {
         if (self.edges) |edges| {
-            self.allocator.free(edges);
+            edges.deinit(self.allocator);
         }
         for (self.pixels) |row| {
             self.allocator.free(row);
@@ -142,7 +169,7 @@ pub const Image = struct {
             @memset(row.*, 0);
         }
         if (self.edges) |*edges| {
-            edges = try self.allocator.realloc(edges, Edge, width * height);
+            try edges.resize(self.allocator, height, width);
         }
         self.height = height;
         self.width = width;
@@ -158,7 +185,7 @@ pub const Image = struct {
 
     pub fn set_edge_detection(self: *Image) !void {
         self.core.edge_detection = true;
-        self.edges = try self.allocator.alloc(Edge, self.width * self.height);
+        self.edges = try EdgeData.init(self.allocator, self.height, self.width);
     }
 
     pub fn set_ascii_info(self: *Image, charset: []const u8) !void {
@@ -203,7 +230,7 @@ pub const Image = struct {
 
     fn get_char(self: *Image, x: usize, y: usize) []const u8 {
         if (self.core.edge_detection) {
-            if (edge_char(self.edges.?[y * self.width + x], self.core.edge_chars)) |c| {
+            if (edge_char(self.edges.?, y * self.width + x, self.core.edge_chars)) |c| {
                 return c;
             }
         }
@@ -380,12 +407,12 @@ fn gray_scale_filter(
     return gray;
 }
 
-fn edge_char(edge: Edge, edge_chars: []const u8) ?[]const u8 {
+fn edge_char(edges: EdgeData, i: usize, edge_chars: []const u8) ?[]const u8 {
     const threshold: f32 = 50;
-    if (edge.mag < threshold) {
+    if (edges.mag[i] < threshold) {
         return null;
     }
-    const deg = std.math.radiansToDegrees(edge.theta);
+    const deg = std.math.radiansToDegrees(edges.theta[i]);
     const ind: usize = blk: {
         if (deg < 22.5 or deg >= 157.5) break :blk 0;
         if (deg < 67.5) break :blk 1;
@@ -397,13 +424,13 @@ fn edge_char(edge: Edge, edge_chars: []const u8) ?[]const u8 {
 
 fn calc_edges(
     allocator: std.mem.Allocator,
-    edge_alg: EdgeDetectionAlg,
-    edges: []Edge,
+    core: Core,
+    edges: EdgeData,
     pixels: [][]u32,
     width: usize,
     height: usize,
 ) !void {
-    @memset(edges, Edge{ .gray = 0, .theta = 0, .mag = 0 });
+    edges.reset();
     const gray = try gray_scale_filter(allocator, pixels, width, height);
     defer allocator.free(gray);
     switch (edge_alg) {
@@ -422,7 +449,7 @@ fn calc_edges(
 }
 
 fn sobel_filter(
-    edges: []Edge,
+    edges: EdgeData,
     img: []u8,
     width: usize,
     height: usize,
@@ -458,7 +485,8 @@ fn sobel_filter(
 
 fn laplacian_filter(
     allocator: std.mem.Allocator,
-    edges: []Edge,
+    core: Core,
+    edges: EdgeData,
     img: []u8,
     width: usize,
     height: usize,
@@ -483,11 +511,10 @@ fn laplacian_filter(
                 }
             }
 
-            edges[@intCast(y * width + x)] = Edge{
-                .gray = img[@intCast(y * width + x)],
-                .mag = @abs(sum),
-                .theta = 0.0,
-            };
+            const ind = y * width + x;
+            edges.img[ind] = img[@intCast(y * width + x)];
+            edges.mag[ind] = @abs(sum);
+            edges.theta[ind] = 0.0;
         }
     }
 }
