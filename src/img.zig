@@ -546,6 +546,16 @@ fn gaussian_smoothing(
     }
 }
 
+fn get_kernel_size(width: usize, height: usize, sigma: f32) usize {
+    const min_dim: usize = if (width < height) width else height;
+    var size: usize = @as(usize, @intFromFloat(@ceil(6.0 * sigma))) | 1;
+    if (size > min_dim / 4) {
+        size = (min_dim / 4) | 1;
+        if (size < 3) size = 3;
+    }
+    return size;
+}
+
 pub fn load_image(filename: []const u8, nchannels: ?i32) !ImageRaw {
     return try stb.load_image(filename, nchannels);
 }
