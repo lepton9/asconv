@@ -456,6 +456,40 @@ fn sobel_filter(
     }
 }
 
+pub fn laplacian_of_gaussian_kernel(
+    comptime sigma: f32,
+) []f32 {
+    const size: i32 = @intFromFloat(sigma * 6);
+    const kernel_size = if (size % 2 == 0) size + 1 else size;
+    var kernel: [kernel_size * kernel_size]f32 = undefined;
+
+    const s2 = sigma * sigma;
+    const s4 = s2 * s2;
+    const center: f32 = @floatFromInt((kernel_size - 1) / 2);
+    var sum: f32 = 0.0;
+
+    for (0..kernel_size) |i| {
+        for (0..kernel_size) |j| {
+            const x: f32 = @as(f32, @floatFromInt(i)) - center;
+            const y: f32 = @as(f32, @floatFromInt(j)) - center;
+            const r2 = x * x + y * y;
+
+            const LoG_xy = (-1.0 / (std.math.pi * s4)) *
+                (1.0 - (r2 / (2.0 * s2))) *
+                @exp(-r2 / (2.0 * s2));
+
+            kernel[i * kernel_size + j] = LoG_xy;
+            sum += LoG_xy;
+        }
+    }
+
+    const avg = sum / @as(f32, @floatFromInt(kernel.len));
+    for (0..kernel.len) |k| {
+        kernel[k] -= avg;
+    }
+    return &kernel;
+}
+
 fn gaussian_kernel(
     comptime sigma: f32,
 ) []f32 {
