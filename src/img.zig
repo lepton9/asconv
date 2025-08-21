@@ -411,7 +411,7 @@ fn calc_edges(
             return sobel_filter(edges, gray, width, height);
         },
         .LoG => {
-            return laplacian_filter(edges, gray, width, height);
+            return try laplacian_filter(allocator, edges, gray, width, height);
         },
         .DoG => {
             // const smooth = try allocator.alloc(u8, width * height);
@@ -456,12 +456,48 @@ fn sobel_filter(
     }
 }
 
+fn laplacian_filter(
+    allocator: std.mem.Allocator,
+    edges: []Edge,
+    img: []u8,
+    width: usize,
+    height: usize,
+) !void {
+    const kernel_size = get_kernel_size(width, height, gaussian_sigma);
+    const kernel = try laplacian_of_gaussian_kernel(allocator, kernel_size, gaussian_sigma);
+    defer allocator.free(kernel);
+    const half: usize = @intCast((kernel_size - 1) / 2);
+
+    for (half..height - half) |y| {
+        for (half..width - half) |x| {
+            var sum: f32 = 0.0;
+
+            for (0..kernel_size) |ky| {
+                for (0..kernel_size) |kx| {
+                    const ix: i32 = @as(i32, @intCast(x)) + @as(i32, @intCast(kx)) - @as(i32, @intCast(half));
+                    const iy: i32 = @as(i32, @intCast(y)) + @as(i32, @intCast(ky)) - @as(i32, @intCast(half));
+
+                    const pixel: f32 =
+                        @floatFromInt(img[@intCast(iy * @as(i32, @intCast(width)) + ix)]);
+                    sum += pixel * kernel[ky * kernel_size + kx];
+                }
+            }
+
+            edges[@intCast(y * width + x)] = Edge{
+                .gray = img[@intCast(y * width + x)],
+                .mag = @abs(sum),
+                .theta = 0.0,
+            };
+        }
+    }
+}
+
 pub fn laplacian_of_gaussian_kernel(
-    comptime sigma: f32,
-) []f32 {
-    const size: i32 = @intFromFloat(sigma * 6);
-    const kernel_size = if (size % 2 == 0) size + 1 else size;
-    var kernel: [kernel_size * kernel_size]f32 = undefined;
+    allocator: std.mem.Allocator,
+    kernel_size: usize,
+    sigma: f32,
+) ![]f32 {
+    var kernel: []f32 = try allocator.alloc(f32, kernel_size * kernel_size);
 
     const s2 = sigma * sigma;
     const s4 = s2 * s2;
@@ -487,7 +523,7 @@ pub fn laplacian_of_gaussian_kernel(
     for (0..kernel.len) |k| {
         kernel[k] -= avg;
     }
-    return &kernel;
+    return kernel;
 }
 
 fn gaussian_kernel(
