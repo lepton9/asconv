@@ -6,7 +6,7 @@ const ftoi = utils.ftoi;
 
 pub const ImageRaw = stb.ImageRaw;
 
-const gaussian_sigma: f32 = 1.0;
+const base_gaussian_sigma: f32 = 1.0;
 const base_char_table = "@#%xo;:,. ";
 
 pub const AsciiCharInfo = struct { start: usize, len: u8 };
@@ -54,6 +54,8 @@ pub const Core = struct {
     scale: f32,
     edge_detection: bool,
     edge_alg: EdgeDetectionAlg,
+    sigma1: f32,
+    sigma2: f32,
 
     pub fn init(allocator: std.mem.Allocator) !*Core {
         const core = try allocator.create(Core);
@@ -63,6 +65,8 @@ pub const Core = struct {
             .edge_detection = false,
             .edge_alg = .Sobel,
             .edge_chars = "-/|\\",
+            .sigma1 = base_gaussian_sigma,
+            .sigma2 = base_gaussian_sigma / 1.6,
             .ascii_info = try AsciiInfo.init(allocator, base_char_table),
         };
         return core;
@@ -207,7 +211,7 @@ pub const Image = struct {
         if (self.core.edge_detection) {
             try calc_edges(
                 self.allocator,
-                self.core.edge_alg,
+                self.core.*,
                 self.edges.?,
                 self.pixels,
                 self.width,
@@ -393,18 +397,16 @@ pub fn free_pixel_mat(pixels: [][]u32, allocator: std.mem.Allocator) void {
 }
 
 fn gray_scale_filter(
-    allocator: std.mem.Allocator,
     pixels: [][]u32,
+    output: []u8,
     width: usize,
     height: usize,
-) ![]u8 {
-    var gray = try allocator.alloc(u8, width * height);
+) void {
     for (1..height) |y| {
         for (1..width) |x| {
-            gray[y * width + x] = gray_scale_avg(pixels[y][x]);
+            output[y * width + x] = gray_scale_avg(pixels[y][x]);
         }
     }
-    return gray;
 }
 
 fn edge_char(edges: EdgeData, i: usize, edge_chars: []const u8) ?[]const u8 {
@@ -431,14 +433,13 @@ fn calc_edges(
     height: usize,
 ) !void {
     edges.reset();
-    const gray = try gray_scale_filter(allocator, pixels, width, height);
-    defer allocator.free(gray);
-    switch (edge_alg) {
+    gray_scale_filter(pixels, edges.img, width, height);
+    switch (core.edge_alg) {
         .Sobel => {
-            return sobel_filter(edges, gray, width, height);
+            return sobel_filter(edges, edges.img, width, height);
         },
         .LoG => {
-            return try laplacian_filter(allocator, edges, gray, width, height);
+            return try laplacian_filter(allocator, core, edges, edges.img, width, height);
         },
         .DoG => {
             // const smooth = try allocator.alloc(u8, width * height);
@@ -470,14 +471,13 @@ fn sobel_filter(
                 }
             }
 
-            edges[y * width + x] = Edge{
-                .gray = img[y * width + x],
-                .mag = std.math.sqrt(gx * gx + gy * gy),
-                .theta = blk: {
-                    var t = std.math.atan2(-gy, gx) + std.math.pi / 2.0;
-                    if (t < 0) t += std.math.pi;
-                    break :blk @mod(t, std.math.pi);
-                },
+            const ind = y * width + x;
+            edges.img[ind] = img[ind];
+            edges.mag[ind] = std.math.sqrt(gx * gx + gy * gy);
+            edges.theta[ind] = blk: {
+                var t = std.math.atan2(-gy, gx) + std.math.pi / 2.0;
+                if (t < 0) t += std.math.pi;
+                break :blk @mod(t, std.math.pi);
             };
         }
     }
@@ -491,8 +491,8 @@ fn laplacian_filter(
     width: usize,
     height: usize,
 ) !void {
-    const kernel_size = get_kernel_size(width, height, gaussian_sigma);
-    const kernel = try laplacian_of_gaussian_kernel(allocator, kernel_size, gaussian_sigma);
+    const kernel_size = get_kernel_size(width, height, core.sigma1);
+    const kernel = try laplacian_of_gaussian_kernel(allocator, kernel_size, core.sigma1);
     defer allocator.free(kernel);
     const half: usize = @intCast((kernel_size - 1) / 2);
 
@@ -581,8 +581,9 @@ fn gaussian_smoothing(
     output: []u8,
     width: usize,
     height: usize,
+    sigma: f32,
 ) void {
-    const kernel = gaussian_kernel(gaussian_sigma);
+    const kernel = gaussian_kernel(sigma);
     const kernel_size: usize = @intCast(std.math.sqrt(kernel.len));
     const center: i32 = @as(i32, @intCast(kernel_size / 2));
     for (0..height) |y| {
