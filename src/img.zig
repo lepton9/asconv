@@ -442,9 +442,8 @@ fn calc_edges(
             return try laplacian_filter(allocator, core, edges, edges.img, width, height);
         },
         .DoG => {
-            // const smooth = try allocator.alloc(u8, width * height);
-            // defer allocator.free(smooth);
-            // gaussian_smoothing(gray, smooth, width, height);
+            try difference_of_gaussians(allocator, core, edges, edges.img, width, height);
+            return sobel_filter(edges, edges.img, width, height);
         },
     }
 }
@@ -553,12 +552,33 @@ pub fn laplacian_of_gaussian_kernel(
     return kernel;
 }
 
+pub fn difference_of_gaussians(
+    allocator: std.mem.Allocator,
+    core: Core,
+    edges: EdgeData,
+    img: []u8,
+    width: usize,
+    height: usize,
+) !void {
+    const smooth1 = try allocator.alloc(u8, width * height);
+    const smooth2 = try allocator.alloc(u8, width * height);
+    defer allocator.free(smooth1);
+    defer allocator.free(smooth2);
+    try gaussian_smoothing(allocator, img, smooth1, width, height, core.sigma1);
+    try gaussian_smoothing(allocator, img, smooth2, width, height, core.sigma2);
+
+    for (0..width * height) |i| {
+        const diff = @as(i16, smooth1[i]) - @as(i16, smooth2[i]);
+        edges.img[i] = @as(u8, @intCast(std.math.clamp(diff + 128, 0, 255)));
+    }
+}
+
 fn gaussian_kernel(
-    comptime sigma: f32,
-) []f32 {
-    const size: i32 = @intFromFloat(sigma * 6);
-    const kernel_size = if (size % 2 == 0) size + 1 else size;
-    var kernel: [kernel_size * kernel_size]f32 = undefined;
+    allocator: std.mem.Allocator,
+    kernel_size: usize,
+    sigma: f32,
+) ![]f32 {
+    var kernel: []f32 = try allocator.alloc(f32, kernel_size * kernel_size);
     const center: f32 = @floatFromInt((kernel_size - 1) / 2);
     const s: f32 = 2.0 * sigma * sigma;
     var sum: f32 = 0.0;
@@ -573,18 +593,20 @@ fn gaussian_kernel(
     for (0..kernel_size * kernel_size) |i| {
         kernel[i] /= sum;
     }
-    return &kernel;
+    return kernel;
 }
 
 fn gaussian_smoothing(
+    allocator: std.mem.Allocator,
     img: []u8,
     output: []u8,
     width: usize,
     height: usize,
     sigma: f32,
-) void {
-    const kernel = gaussian_kernel(sigma);
-    const kernel_size: usize = @intCast(std.math.sqrt(kernel.len));
+) !void {
+    const kernel_size: usize = get_kernel_size(width, height, sigma);
+    const kernel = try gaussian_kernel(allocator, kernel_size, sigma);
+    defer allocator.free(kernel);
     const center: i32 = @as(i32, @intCast(kernel_size / 2));
     for (0..height) |y| {
         for (0..width) |x| {
