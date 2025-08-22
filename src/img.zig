@@ -264,6 +264,31 @@ pub const Image = struct {
         return self.pixel_to_char(self.pixels[y][x]);
     }
 
+    fn append_256_color(buffer: *std.ArrayList(u8), char: []const u8, p: u32) !void {
+        var buf: [64]u8 = undefined;
+        const idx = rgb_to_ansi256(r(p), g(p), b(p));
+        try buffer.appendSlice(try std.fmt.bufPrint(
+            &buf,
+            "\x1b[38;5;{d}m{s}{s}\x1b[0m",
+            .{ idx, char, char },
+        ));
+    }
+
+    fn pixel_to_ascii(
+        self: *Image,
+        buffer: *std.ArrayList(u8),
+        x: usize,
+        y: usize,
+    ) !void {
+        const c: []const u8 = self.get_char(x, y);
+        if (self.core.color) {
+            try append_256_color(buffer, c, self.pixels[y][x]);
+        } else {
+            try buffer.appendSlice(c);
+            try buffer.appendSlice(c);
+        }
+    }
+
     pub fn to_ascii(self: *Image) ![]const u8 {
         var timer = try time.Timer.start(&self.core.perf.converting);
         defer timer.stop();
@@ -271,9 +296,7 @@ pub const Image = struct {
         defer buffer.deinit();
         for (0..self.height) |y| {
             for (0..self.width) |x| {
-                const c: []const u8 = self.get_char(x, y);
-                try buffer.appendSlice(c);
-                try buffer.appendSlice(c);
+                try self.pixel_to_ascii(&buffer, x, y);
             }
             try buffer.appendSlice("\n");
         }
@@ -716,6 +739,13 @@ fn get_kernel_size(width: usize, height: usize, sigma: f32) usize {
         if (size < 3) size = 3;
     }
     return size;
+}
+
+fn rgb_to_ansi256(r_: u8, g_: u8, b_: u8) u8 {
+    const r6 = @divTrunc(r_, 51);
+    const g6 = @divTrunc(g_, 51);
+    const b6 = @divTrunc(b_, 51);
+    return 16 + 36 * r6 + 6 * g6 + b6;
 }
 
 pub fn load_image(filename: []const u8, nchannels: ?i32) !ImageRaw {
