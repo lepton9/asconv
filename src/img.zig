@@ -446,14 +446,14 @@ fn calc_edges(
     gray_scale_filter(pixels, edges.img, width, height);
     switch (core.edge_alg) {
         .Sobel => {
-            return sobel_filter(edges, edges.img, width, height);
+            return sobel_filter(edges, edges.img, width, height, true);
         },
         .LoG => {
-            return try laplacian_filter(allocator, core, edges, edges.img, width, height);
+            return try laplacian_of_gaussian(allocator, core, edges, edges.img, width, height);
         },
         .DoG => {
             try difference_of_gaussians(allocator, core, edges, edges.img, width, height);
-            return sobel_filter(edges, edges.img, width, height);
+            return sobel_filter(edges, edges.img, width, height, true);
         },
     }
 }
@@ -463,6 +463,7 @@ fn sobel_filter(
     img: []u8,
     width: usize,
     height: usize,
+    calc_mag: bool,
 ) void {
     const Gx = [3][3]i32{ .{ -1, 0, 1 }, .{ -2, 0, 2 }, .{ -1, 0, 1 } };
     const Gy = [3][3]i32{ .{ -1, -2, -1 }, .{ 0, 0, 0 }, .{ 1, 2, 1 } };
@@ -482,7 +483,7 @@ fn sobel_filter(
 
             const ind = y * width + x;
             edges.img[ind] = img[ind];
-            edges.mag[ind] = std.math.sqrt(gx * gx + gy * gy);
+            if (calc_mag) edges.mag[ind] = std.math.sqrt(gx * gx + gy * gy);
             edges.theta[ind] = blk: {
                 var t = std.math.atan2(-gy, gx) + std.math.pi / 2.0;
                 if (t < 0) t += std.math.pi;
@@ -492,11 +493,27 @@ fn sobel_filter(
     }
 }
 
-fn laplacian_filter(
+fn laplacian_of_gaussian(
     allocator: std.mem.Allocator,
     core: Core,
     edges: EdgeData,
     img: []u8,
+    width: usize,
+    height: usize,
+) !void {
+    const threshold = 10;
+    const log_img = try allocator.alloc(f32, width * height);
+    defer allocator.free(log_img);
+    try laplacian_filter(allocator, core, img, log_img, width, height);
+    zero_crossings(log_img, edges.mag, width, height, threshold);
+    sobel_filter(edges, img, width, height, false);
+}
+
+fn laplacian_filter(
+    allocator: std.mem.Allocator,
+    core: Core,
+    img: []u8,
+    output: []f32,
     width: usize,
     height: usize,
 ) !void {
@@ -521,9 +538,11 @@ fn laplacian_filter(
             }
 
             const ind = y * width + x;
-            edges.img[ind] = img[@intCast(y * width + x)];
-            edges.mag[ind] = @abs(sum);
-            edges.theta[ind] = 0.0;
+            output[ind] = sum;
+            // edges.img[ind] = img[@intCast(y * width + x)];
+            // edges.mag[ind] = @abs(sum);
+            // edges.mag[ind] = sum;
+            // edges.theta[ind] = 0.0;
         }
     }
 }
@@ -560,6 +579,43 @@ pub fn laplacian_of_gaussian_kernel(
         kernel[k] -= avg;
     }
     return kernel;
+}
+
+fn zero_crossings(
+    log_img: []f32,
+    output: []f32,
+    width: usize,
+    height: usize,
+    threshold: f32,
+) void {
+    for (1..height - 1) |y| {
+        for (1..width - 1) |x| {
+            const idx = y * width + x;
+            const val = log_img[idx];
+            var is_edge = false;
+
+            // Check 8 neighbors for sign change
+            inline for ([_]i32{ -1, 0, 1 }) |dy| {
+                inline for ([_]i32{ -1, 0, 1 }) |dx| {
+                    if (dx == 0 and dy == 0) continue;
+
+                    const nx = @as(i32, @intCast(x)) + dx;
+                    const ny = @as(i32, @intCast(y)) + dy;
+                    const nidx = @as(usize, @intCast(ny * @as(i32, @intCast(width)) + nx));
+
+                    const nval = log_img[nidx];
+
+                    // Zero-crossing if opposite signs AND strong enough difference
+                    if ((val > 0 and nval < 0) or (val < 0 and nval > 0)) {
+                        if (@abs(val - nval) > threshold) {
+                            is_edge = true;
+                        }
+                    }
+                }
+            }
+            output[idx] = if (is_edge) 255 else 0;
+        }
+    }
 }
 
 pub fn difference_of_gaussians(
