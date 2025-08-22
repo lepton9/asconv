@@ -513,21 +513,22 @@ fn laplacian_of_gaussian(
     const threshold = 10;
     const log_img = try allocator.alloc(f32, width * height);
     defer allocator.free(log_img);
-    try laplacian_filter(allocator, core, img, log_img, width, height);
+    try gaussian_smoothing(allocator, img, img, width, height, core.sigma1);
+    try laplacian_filter(allocator, img, log_img, width, height, core.sigma1);
     zero_crossings(log_img, edges.mag, width, height, threshold);
     sobel_filter(edges, img, width, height, false);
 }
 
 fn laplacian_filter(
     allocator: std.mem.Allocator,
-    core: Core,
     img: []u8,
     output: []f32,
     width: usize,
     height: usize,
+    sigma: f32,
 ) !void {
-    const kernel_size = get_kernel_size(width, height, core.sigma1);
-    const kernel = try laplacian_of_gaussian_kernel(allocator, kernel_size, core.sigma1);
+    const kernel_size = get_kernel_size(width, height, sigma);
+    const kernel = try laplacian_of_gaussian_kernel(allocator, kernel_size, sigma);
     defer allocator.free(kernel);
     const half: usize = @intCast((kernel_size - 1) / 2);
 
@@ -548,10 +549,6 @@ fn laplacian_filter(
 
             const ind = y * width + x;
             output[ind] = sum;
-            // edges.img[ind] = img[@intCast(y * width + x)];
-            // edges.mag[ind] = @abs(sum);
-            // edges.mag[ind] = sum;
-            // edges.theta[ind] = 0.0;
         }
     }
 }
@@ -603,7 +600,6 @@ fn zero_crossings(
             const val = log_img[idx];
             var is_edge = false;
 
-            // Check 8 neighbors for sign change
             inline for ([_]i32{ -1, 0, 1 }) |dy| {
                 inline for ([_]i32{ -1, 0, 1 }) |dx| {
                     if (dx == 0 and dy == 0) continue;
@@ -614,7 +610,6 @@ fn zero_crossings(
 
                     const nval = log_img[nidx];
 
-                    // Zero-crossing if opposite signs AND strong enough difference
                     if ((val > 0 and nval < 0) or (val < 0 and nval > 0)) {
                         if (@abs(val - nval) > threshold) {
                             is_edge = true;
