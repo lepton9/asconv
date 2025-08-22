@@ -71,6 +71,13 @@ pub const options = [_]Option{
         .arg_name = "float",
     },
     .{
+        .long_name = "reverse",
+        .short_name = "r",
+        .desc = "Reverse the charset",
+        .required = false,
+        .arg_name = null,
+    },
+    .{
         .long_name = "edges",
         .short_name = "e",
         .desc = "Edge detection",
@@ -78,10 +85,10 @@ pub const options = [_]Option{
         .arg_name = null,
     },
     .{
-        .long_name = "reverse",
-        .short_name = "r",
-        .desc = "Reverse the charset",
+        .long_name = "sigma",
+        .short_name = null,
+        .desc = "Sigma value for DoG and LoG (default: 1.0)",
         .required = false,
-        .arg_name = null,
+        .arg_name = "float",
     },
 };

@@ -80,6 +80,11 @@ pub const Core = struct {
         allocator.free(self.ascii_info.char_info);
         try self.ascii_info.set_charset(allocator, charset);
     }
+
+    pub fn set_sigma(self: *Core, sigma: f32) void {
+        self.sigma1 = sigma;
+        self.sigma2 = sigma / 1.6;
+    }
 };
 
 const EdgeData = struct {
