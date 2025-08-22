@@ -53,6 +53,7 @@ pub const Core = struct {
     edge_chars: []const u8,
     brightness: f32,
     scale: f32,
+    color: bool,
     edge_detection: bool,
     edge_alg: EdgeDetectionAlg,
     sigma1: f32,
@@ -64,6 +65,7 @@ pub const Core = struct {
         core.* = .{
             .brightness = 1.0,
             .scale = 1.0,
+            .color = false,
             .edge_detection = false,
             .edge_alg = .Sobel,
             .edge_chars = "-/|\\",
@@ -92,6 +94,10 @@ pub const Core = struct {
     pub fn set_edge_alg(self: *Core, alg: []const u8) !void {
         self.edge_alg = utils.string_to_enum_ic(EdgeDetectionAlg, alg) orelse
             return error.NoAlgorithmFound;
+    }
+
+    pub fn toggle_color(self: *Core) void {
+        self.color = !self.color;
     }
 };
 

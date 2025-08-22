@@ -191,6 +191,9 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     if (cli_.find_opt("reverse")) |_| {
         std.mem.reverse(u8, charset);
     }
+    if (cli_.find_opt("color")) |_| {
+        core.toggle_color();
+    }
     if (cli_.find_opt("edges")) |_| {
         core.edge_detection = true;
     }

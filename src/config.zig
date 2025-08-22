@@ -78,6 +78,13 @@ pub const options = [_]Option{
         .arg_name = null,
     },
     .{
+        .long_name = "color",
+        .short_name = "c",
+        .desc = "Output with ANSI colors",
+        .required = false,
+        .arg_name = null,
+    },
+    .{
         .long_name = "edges",
         .short_name = "e",
         .desc = "Edge detection",
