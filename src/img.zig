@@ -54,6 +54,7 @@ pub const Core = struct {
     brightness: f32,
     scale: f32,
     color: bool,
+    color_mode: ColorMode,
     edge_detection: bool,
     edge_alg: EdgeDetectionAlg,
     sigma1: f32,
@@ -66,6 +67,7 @@ pub const Core = struct {
             .brightness = 1.0,
             .scale = 1.0,
             .color = false,
+            .color_mode = .color256,
             .edge_detection = false,
             .edge_alg = .Sobel,
             .edge_chars = "-/|\\",
@@ -94,6 +96,11 @@ pub const Core = struct {
     pub fn set_edge_alg(self: *Core, alg: []const u8) !void {
         self.edge_alg = utils.string_to_enum_ic(EdgeDetectionAlg, alg) orelse
             return error.NoAlgorithmFound;
+    }
+
+    pub fn set_color_mode(self: *Core, mode: []const u8) !void {
+        self.color_mode = utils.string_to_enum_ic(ColorMode, mode) orelse
+            return error.NoColorModeFound;
     }
 
     pub fn toggle_color(self: *Core) void {
@@ -132,6 +139,11 @@ const EdgeData = struct {
         @memset(self.mag, 0);
         @memset(self.theta, 0);
     }
+};
+
+const ColorMode = enum {
+    truecolor,
+    color256,
 };
 
 const EdgeDetectionAlg = enum {
@@ -264,16 +276,6 @@ pub const Image = struct {
         return self.pixel_to_char(self.pixels[y][x]);
     }
 
-    fn append_256_color(buffer: *std.ArrayList(u8), char: []const u8, p: u32) !void {
-        var buf: [64]u8 = undefined;
-        const idx = rgb_to_ansi256(r(p), g(p), b(p));
-        try buffer.appendSlice(try std.fmt.bufPrint(
-            &buf,
-            "\x1b[38;5;{d}m{s}{s}\x1b[0m",
-            .{ idx, char, char },
-        ));
-    }
-
     fn pixel_to_ascii(
         self: *Image,
         buffer: *std.ArrayList(u8),
@@ -281,8 +283,9 @@ pub const Image = struct {
         y: usize,
     ) !void {
         const c: []const u8 = self.get_char(x, y);
-        if (self.core.color) {
-            try append_256_color(buffer, c, self.pixels[y][x]);
+        if (self.core.color) switch (self.core.color_mode) {
+            .color256 => try append_256_color(buffer, c, self.pixels[y][x]),
+            .truecolor => try append_truecolor(buffer, c, self.pixels[y][x]),
         } else {
             try buffer.appendSlice(c);
             try buffer.appendSlice(c);
@@ -746,6 +749,25 @@ fn rgb_to_ansi256(r_: u8, g_: u8, b_: u8) u8 {
     const g6 = @divTrunc(g_, 51);
     const b6 = @divTrunc(b_, 51);
     return 16 + 36 * r6 + 6 * g6 + b6;
+}
+
+fn append_256_color(buffer: *std.ArrayList(u8), char: []const u8, p: u32) !void {
+    var buf: [64]u8 = undefined;
+    const idx = rgb_to_ansi256(r(p), g(p), b(p));
+    try buffer.appendSlice(try std.fmt.bufPrint(
+        &buf,
+        "\x1b[38;5;{d}m{s}{s}\x1b[0m",
+        .{ idx, char, char },
+    ));
+}
+
+fn append_truecolor(buffer: *std.ArrayList(u8), char: []const u8, p: u32) !void {
+    var buf: [64]u8 = undefined;
+    try buffer.appendSlice(try std.fmt.bufPrint(
+        &buf,
+        "\x1b[38;2;{d};{d};{d}m{s}{s}\x1b[0m",
+        .{ r(p), g(p), b(p), char, char },
+    ));
 }
 
 pub fn load_image(filename: []const u8, nchannels: ?i32) !ImageRaw {
