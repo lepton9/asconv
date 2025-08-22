@@ -1,20 +1,11 @@
 .{
     .name = .asconv,
-    .version = "0.0.0",
-    .fingerprint = 0xe418a193eb31c225, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.14.1",
+    .version = "0.1.0",
+    .fingerprint = 0xe418a193eb31c225,
+    .minimum_zig_version = "0.14.0",
 
-    // Each dependency must either provide a `url` and `hash`, or a `path`.
-    .dependencies = .{
-        //.example = .{
-        //    .url = "https://example.com/foo.tar.gz",
-        //    .hash = "...",
-        //    .path = "foo",
-        //    .lazy = false,
-        //},
-    },
+    .dependencies = .{},
 
-    // Specifies the set of files and directories that are included in this package.
     .paths = .{
         "build.zig",
         "build.zig.zon",
