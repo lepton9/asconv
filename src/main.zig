@@ -76,6 +76,9 @@ fn handle_exec_error(err: result.ErrorWrap) void {
         exec.ExecError.NoAlgorithmFound => {
             std.log.err("No edge detection algorithm '{s}'", .{err.get_ctx()});
         },
+        exec.ExecError.NoColorModeFound => {
+            std.log.err("No colormode '{s}'", .{err.get_ctx()});
+        },
         exec.ExecError.FetchError => {
             std.log.err("Failed to fetch image {s}", .{err.get_ctx()});
         },

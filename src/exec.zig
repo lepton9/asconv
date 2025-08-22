@@ -26,6 +26,7 @@ pub const ExecError = error{
     DuplicateInput,
     NoInputFile,
     NoAlgorithmFound,
+    NoColorModeFound,
     FetchError,
     InvalidUrl,
 };
@@ -193,6 +194,11 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     }
     if (cli_.find_opt("color")) |_| {
         core.toggle_color();
+    }
+    if (cli_.find_opt("colormode")) |opt_mode| {
+        core.set_color_mode(opt_mode.arg_value.?) catch {
+            return result.ErrorWrap.create(ExecError.NoColorModeFound, "{s}", .{opt_mode.arg_value.?});
+        };
     }
     if (cli_.find_opt("edges")) |_| {
         core.edge_detection = true;

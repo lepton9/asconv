@@ -6,20 +6,20 @@ pub const characters = "M0WN#B@RZUKHEDQA84wmhPkXVOGFgdbS52yqpYL96*3TJCunfzrojea7
 
 pub const commands = [_]Cmd{
     .{
-        .name = "size",
-        .desc = "Show size of the image",
-        .options = null,
-    },
-    .{
         .name = "ascii",
         .desc = "Convert to ascii",
         .options = null,
     },
     .{
-        .name = "compress",
-        .desc = "Compress image",
+        .name = "size",
+        .desc = "Show size of the image",
         .options = null,
     },
+    // .{
+    //     .name = "compress",
+    //     .desc = "Compress image",
+    //     .options = null,
+    // },
     .{
         .name = "help",
         .desc = "Print help",
@@ -83,6 +83,13 @@ pub const options = [_]Option{
         .desc = "Output with ANSI colors",
         .required = false,
         .arg_name = null,
+    },
+    .{
+        .long_name = "colormode",
+        .short_name = null,
+        .desc = "Set the range of colors used (default: color256)",
+        .required = false,
+        .arg_name = "color256|truecolor",
     },
     .{
         .long_name = "edges",
