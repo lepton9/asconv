@@ -19,3 +19,12 @@ pub fn format_slice(comptime T: type, items: []const T, allocator: std.mem.Alloc
     }
     return buf.toOwnedSlice() catch "";
 }
+
+pub fn string_to_enum_ic(comptime T: type, str: []const u8) ?T {
+    inline for (@typeInfo(T).@"enum".fields) |enumField| {
+        if (std.ascii.eqlIgnoreCase(str, enumField.name)) {
+            return @field(T, enumField.name);
+        }
+    }
+    return null;
+}
