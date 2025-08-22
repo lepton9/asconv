@@ -98,4 +98,11 @@ pub const options = [_]Option{
         .required = false,
         .arg_name = "float",
     },
+    .{
+        .long_name = "time",
+        .short_name = "t",
+        .desc = "Show the time taken to convert the image",
+        .required = false,
+        .arg_name = null,
+    },
 };

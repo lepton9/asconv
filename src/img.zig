@@ -1,6 +1,7 @@
 const std = @import("std");
 const stb = @import("stb_image");
 const utils = @import("utils");
+pub const time = @import("time.zig");
 const itof = utils.itof;
 const ftoi = utils.ftoi;
 
@@ -56,6 +57,7 @@ pub const Core = struct {
     edge_alg: EdgeDetectionAlg,
     sigma1: f32,
     sigma2: f32,
+    perf: time.Time,
 
     pub fn init(allocator: std.mem.Allocator) !*Core {
         const core = try allocator.create(Core);
@@ -68,6 +70,7 @@ pub const Core = struct {
             .sigma1 = base_gaussian_sigma,
             .sigma2 = base_gaussian_sigma / 1.6,
             .ascii_info = try AsciiInfo.init(allocator, base_char_table),
+            .perf = time.Time.init(),
         };
         return core;
     }
@@ -208,6 +211,7 @@ pub const Image = struct {
 
     pub fn fit_image(self: *Image) !void {
         if (self.raw_image.data == null) return error.NoImageData;
+        var timer_scaling = try time.Timer.start(&self.core.perf.scaling);
         const pixels: [][]u32 = try convert_to_pixel_matrix(self.allocator, self.raw_image);
         defer free_pixel_mat(pixels, self.allocator);
         scale_nearest(
@@ -218,7 +222,10 @@ pub const Image = struct {
             self.width,
             self.height,
         );
+        timer_scaling.stop();
         if (self.core.edge_detection) {
+            var timer = try time.Timer.start(&self.core.perf.edge_detect);
+            defer timer.stop();
             try calc_edges(
                 self.allocator,
                 self.core.*,
@@ -252,6 +259,8 @@ pub const Image = struct {
     }
 
     pub fn to_ascii(self: *Image) ![]const u8 {
+        var timer = try time.Timer.start(&self.core.perf.converting);
+        defer timer.stop();
         var buffer = std.ArrayList(u8).init(self.allocator);
         defer buffer.deinit();
         for (0..self.height) |y| {

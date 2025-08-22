@@ -5,6 +5,7 @@ const result = @import("result");
 const image = @import("img");
 const utils = @import("utils");
 const config = @import("config.zig");
+const time = image.time;
 const Image = image.Image;
 const ImageRaw = image.ImageRaw;
 
@@ -163,6 +164,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     const charset: []u8 = try allocator.dupe(u8, config.characters);
     defer allocator.free(charset);
     var core = try image.Core.init(allocator);
+    var timer_total = try time.Timer.start(&core.perf.total);
 
     if (cli_.find_opt("height")) |opt_height| {
         height = std.fmt.parseInt(u32, opt_height.arg_value.?, 10) catch {
@@ -216,12 +218,40 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     const data = try img.to_ascii();
     defer allocator.free(data);
     const file = output_file(cli_);
+    var timer_print = try time.Timer.start(&core.perf.writing);
     if (file) |path| {
         try write_to_file(path, data);
     } else {
         try write_to_stdio(data);
     }
+    timer_print.stop();
+    timer_total.stop();
+    if (cli_.find_opt("time")) |_| {
+        try show_performance(allocator, core.perf);
+    }
     return null;
+}
+
+fn show_performance(allocator: std.mem.Allocator, perf: time.Time) !void {
+    var line_buf: [256]u8 = undefined;
+    var buffer = std.ArrayList(u8).init(allocator);
+    defer buffer.deinit();
+    try buffer.appendSlice(
+        try std.fmt.bufPrint(&line_buf, "Scaling: {d:.3} s\n", .{time.to_s(perf.scaling)}),
+    );
+    try buffer.appendSlice(
+        try std.fmt.bufPrint(&line_buf, "Edge detecting: {d:.3} s\n", .{time.to_s(perf.edge_detect)}),
+    );
+    try buffer.appendSlice(
+        try std.fmt.bufPrint(&line_buf, "Converting: {d:.3} s\n", .{time.to_s(perf.converting)}),
+    );
+    try buffer.appendSlice(
+        try std.fmt.bufPrint(&line_buf, "Writing: {d:.3} s\n", .{time.to_s(perf.writing)}),
+    );
+    try buffer.appendSlice(
+        try std.fmt.bufPrint(&line_buf, "Total: {d:.3} s\n", .{time.to_s(perf.total)}),
+    );
+    try write_to_stdio(buffer.items);
 }
 
 fn help(allocator: std.mem.Allocator, args_struct: *cmd.ArgsStructure) !void {
