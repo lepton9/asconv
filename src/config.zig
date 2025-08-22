@@ -85,6 +85,13 @@ pub const options = [_]Option{
         .arg_name = null,
     },
     .{
+        .long_name = "alg",
+        .short_name = null,
+        .desc = "Algorithm for edge detection (default: sobel)",
+        .required = false,
+        .arg_name = "sobel|LoG|DoG",
+    },
+    .{
         .long_name = "sigma",
         .short_name = null,
         .desc = "Sigma value for DoG and LoG (default: 1.0)",

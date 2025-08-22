@@ -64,11 +64,17 @@ fn handle_exec_error(err: result.ErrorWrap) void {
         exec.ExecError.ParseErrorBrightness => {
             std.log.err("Failed to parse brightness '{s}'", .{err.get_ctx()});
         },
+        exec.ExecError.ParseErrorSigma => {
+            std.log.err("Failed to parse sigma '{s}'", .{err.get_ctx()});
+        },
         exec.ExecError.DuplicateInput => {
             std.log.err("Multiple input files '{s}'", .{err.get_ctx()});
         },
         exec.ExecError.NoInputFile => {
             std.log.err("No input file given", .{});
+        },
+        exec.ExecError.NoAlgorithmFound => {
+            std.log.err("No edge detection algorithm '{s}'", .{err.get_ctx()});
         },
         exec.ExecError.FetchError => {
             std.log.err("Failed to fetch image {s}", .{err.get_ctx()});

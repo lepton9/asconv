@@ -85,6 +85,11 @@ pub const Core = struct {
         self.sigma1 = sigma;
         self.sigma2 = sigma / 1.6;
     }
+
+    pub fn set_edge_alg(self: *Core, alg: []const u8) !void {
+        self.edge_alg = utils.string_to_enum_ic(EdgeDetectionAlg, alg) orelse
+            return error.NoAlgorithmFound;
+    }
 };
 
 const EdgeData = struct {

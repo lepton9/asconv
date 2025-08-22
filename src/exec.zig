@@ -21,8 +21,10 @@ pub const ExecError = error{
     ParseErrorWidth,
     ParseErrorScale,
     ParseErrorBrightness,
+    ParseErrorSigma,
     DuplicateInput,
     NoInputFile,
+    NoAlgorithmFound,
     FetchError,
     InvalidUrl,
 };
@@ -190,10 +192,15 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     if (cli_.find_opt("edges")) |_| {
         core.edge_detection = true;
     }
+    if (cli_.find_opt("alg")) |opt_alg| {
+        core.set_edge_alg(opt_alg.arg_value.?) catch {
+            return result.ErrorWrap.create(ExecError.NoAlgorithmFound, "{s}", .{opt_alg.arg_value.?});
+        };
+    }
     if (cli_.find_opt("sigma")) |opt_sigma| {
         core.set_sigma(
             std.fmt.parseFloat(f32, opt_sigma.arg_value.?) catch {
-                return result.ErrorWrap.create(ExecError.ParseErrorBrightness, "{s}", .{opt_sigma.arg_value.?});
+                return result.ErrorWrap.create(ExecError.ParseErrorSigma, "{s}", .{opt_sigma.arg_value.?});
             },
         );
     }
