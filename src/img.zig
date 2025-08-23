@@ -770,6 +770,12 @@ fn append_truecolor(buffer: *std.ArrayList(u8), char: []const u8, p: u32) !void 
     ));
 }
 
+pub fn get_scale(img_w: u32, img_h: u32, target_w: u32, target_h: u32) f32 {
+    const scale_w: f32 = utils.itof(f32, target_w) / utils.itof(f32, img_w);
+    const scale_h: f32 = utils.itof(f32, target_h) / utils.itof(f32, img_h);
+    return @min(scale_w, scale_h);
+}
+
 pub fn load_image(filename: []const u8, nchannels: ?i32) !ImageRaw {
     return try stb.load_image(filename, nchannels);
 }

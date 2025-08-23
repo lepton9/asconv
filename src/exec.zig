@@ -5,6 +5,7 @@ const result = @import("result");
 const image = @import("img");
 const utils = @import("utils");
 const config = @import("config.zig");
+const term = @import("term.zig");
 const time = image.time;
 const Image = image.Image;
 const ImageRaw = image.ImageRaw;
@@ -183,6 +184,17 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
         };
         height = @intFromFloat(utils.itof(f32, height) * core.scale);
         width = @intFromFloat(utils.itof(f32, width) * core.scale);
+    }
+    if (cli_.find_opt("fit")) |_| {
+        const term_size = try term.get_term_size();
+        core.scale = image.get_scale(
+            @intCast(raw_image.width),
+            @intCast(raw_image.height),
+            term_size.width,
+            term_size.height,
+        );
+        height = @intFromFloat(utils.itof(f32, raw_image.height) * core.scale);
+        width = @intFromFloat(utils.itof(f32, raw_image.width) * core.scale);
     }
     if (cli_.find_opt("brightness")) |opt_brightness| {
         core.brightness = std.fmt.parseFloat(f32, opt_brightness.arg_value.?) catch {

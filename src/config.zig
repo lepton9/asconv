@@ -64,6 +64,13 @@ pub const options = [_]Option{
         .arg_name = "float",
     },
     .{
+        .long_name = "fit",
+        .short_name = "f",
+        .desc = "Scale the image to fit the terminal",
+        .required = false,
+        .arg_name = null,
+    },
+    .{
         .long_name = "brightness",
         .short_name = "b",
         .desc = "Set brightness boost",
