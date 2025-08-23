@@ -167,67 +167,12 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     };
     var height: u32 = @intCast(raw_image.height);
     var width: u32 = @intCast(raw_image.width);
-    const charset: []u8 = try allocator.dupe(u8, config.characters);
+    var charset: []u8 = try allocator.dupe(u8, config.characters);
     defer allocator.free(charset);
+    core.ascii_info.char_table = charset;
 
-    if (cli_.find_opt("height")) |opt_height| {
-        height = std.fmt.parseInt(u32, opt_height.arg_value.?, 10) catch {
-            return result.ErrorWrap.create(ExecError.ParseErrorHeight, "{s}", .{opt_height.arg_value.?});
-        };
-    }
-    if (cli_.find_opt("width")) |opt_width| {
-        width = std.fmt.parseInt(u32, opt_width.arg_value.?, 10) catch {
-            return result.ErrorWrap.create(ExecError.ParseErrorWidth, "{s}", .{opt_width.arg_value.?});
-        };
-    }
-    if (cli_.find_opt("scale")) |opt_scale| {
-        core.scale = std.fmt.parseFloat(f32, opt_scale.arg_value.?) catch {
-            return result.ErrorWrap.create(ExecError.ParseErrorScale, "{s}", .{opt_scale.arg_value.?});
-        };
-        height = @intFromFloat(utils.itof(f32, height) * core.scale);
-        width = @intFromFloat(utils.itof(f32, width) * core.scale);
-    }
-    if (cli_.find_opt("fit")) |_| {
-        const term_size = try term.get_term_size();
-        core.scale = image.get_scale(
-            @intCast(raw_image.width),
-            @intCast(raw_image.height),
-            term_size.width,
-            term_size.height,
-        );
-        height = @intFromFloat(utils.itof(f32, raw_image.height) * core.scale);
-        width = @intFromFloat(utils.itof(f32, raw_image.width) * core.scale);
-    }
-    if (cli_.find_opt("brightness")) |opt_brightness| {
-        core.brightness = std.fmt.parseFloat(f32, opt_brightness.arg_value.?) catch {
-            return result.ErrorWrap.create(ExecError.ParseErrorBrightness, "{s}", .{opt_brightness.arg_value.?});
-        };
-    }
-    if (cli_.find_opt("reverse")) |_| {
-        std.mem.reverse(u8, charset);
-    }
-    if (cli_.find_opt("color")) |_| {
-        core.toggle_color();
-    }
-    if (cli_.find_opt("colormode")) |opt_mode| {
-        core.set_color_mode(opt_mode.arg_value.?) catch {
-            return result.ErrorWrap.create(ExecError.NoColorModeFound, "{s}", .{opt_mode.arg_value.?});
-        };
-    }
-    if (cli_.find_opt("edges")) |_| {
-        core.edge_detection = true;
-    }
-    if (cli_.find_opt("alg")) |opt_alg| {
-        core.set_edge_alg(opt_alg.arg_value.?) catch {
-            return result.ErrorWrap.create(ExecError.NoAlgorithmFound, "{s}", .{opt_alg.arg_value.?});
-        };
-    }
-    if (cli_.find_opt("sigma")) |opt_sigma| {
-        core.set_sigma(
-            std.fmt.parseFloat(f32, opt_sigma.arg_value.?) catch {
-                return result.ErrorWrap.create(ExecError.ParseErrorSigma, "{s}", .{opt_sigma.arg_value.?});
-            },
-        );
+    if (try ascii_opts(cli_, core, &width, &height, &charset)) |err| {
+        return err;
     }
 
     var img = try Image.init(allocator, height, width);
@@ -251,6 +196,67 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     timer_total.stop();
     if (cli_.find_opt("time")) |_| {
         try show_performance(allocator, core.perf);
+    }
+    return null;
+}
+
+fn ascii_opts(
+    cli_: *cli.Cli,
+    core: *image.Core,
+    width: *u32,
+    height: *u32,
+    charset: *[]u8,
+) !?result.ErrorWrap {
+    for (cli_.args.?.items) |*opt| {
+        if (std.mem.eql(u8, opt.long_name, "height")) {
+            height.* = std.fmt.parseInt(u32, opt.arg_value.?, 10) catch {
+                return result.ErrorWrap.create(ExecError.ParseErrorHeight, "{s}", .{opt.arg_value.?});
+            };
+        } else if (std.mem.eql(u8, opt.long_name, "width")) {
+            width.* = std.fmt.parseInt(u32, opt.arg_value.?, 10) catch {
+                return result.ErrorWrap.create(ExecError.ParseErrorWidth, "{s}", .{opt.arg_value.?});
+            };
+        } else if (std.mem.eql(u8, opt.long_name, "scale")) {
+            core.scale = std.fmt.parseFloat(f32, opt.arg_value.?) catch {
+                return result.ErrorWrap.create(ExecError.ParseErrorScale, "{s}", .{opt.arg_value.?});
+            };
+            height.* = @intFromFloat(utils.itof(f32, height.*) * core.scale);
+            width.* = @intFromFloat(utils.itof(f32, width.*) * core.scale);
+        } else if (std.mem.eql(u8, opt.long_name, "fit")) {
+            const term_size = try term.get_term_size();
+            core.scale = image.get_scale(
+                @intCast(width.*),
+                @intCast(height.*),
+                term_size.width,
+                term_size.height,
+            );
+            height.* = @intFromFloat(utils.itof(f32, height.*) * core.scale);
+            width.* = @intFromFloat(utils.itof(f32, width.*) * core.scale);
+        } else if (std.mem.eql(u8, opt.long_name, "brightness")) {
+            core.brightness = std.fmt.parseFloat(f32, opt.arg_value.?) catch {
+                return result.ErrorWrap.create(ExecError.ParseErrorBrightness, "{s}", .{opt.arg_value.?});
+            };
+        } else if (std.mem.eql(u8, opt.long_name, "reverse")) {
+            std.mem.reverse(u8, charset.*);
+        } else if (std.mem.eql(u8, opt.long_name, "color")) {
+            core.toggle_color();
+        } else if (std.mem.eql(u8, opt.long_name, "colormode")) {
+            core.set_color_mode(opt.arg_value.?) catch {
+                return result.ErrorWrap.create(ExecError.NoColorModeFound, "{s}", .{opt.arg_value.?});
+            };
+        } else if (std.mem.eql(u8, opt.long_name, "edges")) {
+            core.edge_detection = true;
+        } else if (std.mem.eql(u8, opt.long_name, "alg")) {
+            core.set_edge_alg(opt.arg_value.?) catch {
+                return result.ErrorWrap.create(ExecError.NoAlgorithmFound, "{s}", .{opt.arg_value.?});
+            };
+        } else if (std.mem.eql(u8, opt.long_name, "sigma")) {
+            core.set_sigma(
+                std.fmt.parseFloat(f32, opt.arg_value.?) catch {
+                    return result.ErrorWrap.create(ExecError.ParseErrorSigma, "{s}", .{opt.arg_value.?});
+                },
+            );
+        }
     }
     return null;
 }
