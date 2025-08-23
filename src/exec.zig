@@ -154,10 +154,14 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
 }
 
 fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
+    var core = try image.Core.init(allocator);
+    var timer_total = try time.Timer.start(&core.perf.total);
     const filename = input_file(cli_) catch |err| {
         return result.ErrorWrap.create(err, "{s}", .{cli_.global_args orelse ""});
     };
+    var timer_read = try time.Timer.start(&core.perf.read);
     const img_result = get_input_image(allocator, filename);
+    timer_read.stop();
     const raw_image = img_result.unwrap_try() catch {
         return img_result.unwrap_err();
     };
@@ -165,8 +169,6 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     var width: u32 = @intCast(raw_image.width);
     const charset: []u8 = try allocator.dupe(u8, config.characters);
     defer allocator.free(charset);
-    var core = try image.Core.init(allocator);
-    var timer_total = try time.Timer.start(&core.perf.total);
 
     if (cli_.find_opt("height")) |opt_height| {
         height = std.fmt.parseInt(u32, opt_height.arg_value.?, 10) catch {
@@ -239,7 +241,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     const data = try img.to_ascii();
     defer allocator.free(data);
     const file = output_file(cli_);
-    var timer_print = try time.Timer.start(&core.perf.writing);
+    var timer_print = try time.Timer.start(&core.perf.write);
     if (file) |path| {
         try write_to_file(path, data);
     } else {
@@ -267,7 +269,10 @@ fn show_performance(allocator: std.mem.Allocator, perf: time.Time) !void {
         try std.fmt.bufPrint(&line_buf, "Converting: {d:.3} s\n", .{time.to_s(perf.converting)}),
     );
     try buffer.appendSlice(
-        try std.fmt.bufPrint(&line_buf, "Writing: {d:.3} s\n", .{time.to_s(perf.writing)}),
+        try std.fmt.bufPrint(&line_buf, "Read: {d:.3} s\n", .{time.to_s(perf.read)}),
+    );
+    try buffer.appendSlice(
+        try std.fmt.bufPrint(&line_buf, "Write: {d:.3} s\n", .{time.to_s(perf.write)}),
     );
     try buffer.appendSlice(
         try std.fmt.bufPrint(&line_buf, "Total: {d:.3} s\n", .{time.to_s(perf.total)}),

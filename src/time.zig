@@ -5,7 +5,8 @@ pub const Time = struct {
     scaling: u64 = 0,
     edge_detect: u64 = 0,
     converting: u64 = 0,
-    writing: u64 = 0,
+    read: u64 = 0,
+    write: u64 = 0,
 
     pub fn init() Time {
         return Time{};
