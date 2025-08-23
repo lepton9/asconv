@@ -1,10 +1,10 @@
 const std = @import("std");
 
-pub fn itof(comptime T: type, i: usize) T {
+pub fn itof(comptime T: type, i: anytype) T {
     return @as(T, @floatFromInt(i));
 }
 
-pub fn ftoi(comptime T: type, i: f64) T {
+pub fn ftoi(comptime T: type, i: anytype) T {
     return @as(T, @intFromFloat(std.math.floor(i)));
 }
 
