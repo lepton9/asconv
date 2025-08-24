@@ -2,7 +2,7 @@ const cli = @import("cli");
 const Cmd = cli.Cmd;
 const Option = cli.Option;
 
-pub const characters = "M0WN#B@RZUKHEDQA84wmhPkXVOGFgdbS52yqpYL96*3TJCunfzrojea7%x1vscItli+=:-. ";
+pub const characters = " .-:=+iltIcsv1x%7aejorzfnuCJT3*69LYpqy25SbdgFGOVXkPhmw48AQDEHKUZR@B#NW0M";
 
 pub const commands = [_]Cmd{
     .{

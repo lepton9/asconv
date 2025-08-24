@@ -8,7 +8,7 @@ const ftoi = utils.ftoi;
 pub const ImageRaw = stb.ImageRaw;
 
 const base_gaussian_sigma: f32 = 1.0;
-const base_char_table = "@#%xo;:,. ";
+const base_char_table = " .,:;ox%#@";
 
 pub const AsciiCharInfo = struct { start: usize, len: u8 };
 
