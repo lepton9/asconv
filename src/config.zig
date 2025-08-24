@@ -85,6 +85,13 @@ pub const options = [_]Option{
         .arg_name = null,
     },
     .{
+        .long_name = "charset",
+        .short_name = null,
+        .desc = "Set custom characters to use",
+        .required = false,
+        .arg_name = "string",
+    },
+    .{
         .long_name = "color",
         .short_name = "c",
         .desc = "Output with ANSI colors",

@@ -169,9 +169,8 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     var width: u32 = @intCast(raw_image.width);
     var charset: []u8 = try allocator.dupe(u8, config.characters);
     defer allocator.free(charset);
-    core.ascii_info.char_table = charset;
 
-    if (try ascii_opts(cli_, core, &width, &height, &charset)) |err| {
+    if (try ascii_opts(allocator, cli_, core, &width, &height, &charset)) |err| {
         return err;
     }
 
@@ -201,6 +200,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
 }
 
 fn ascii_opts(
+    allocator: std.mem.Allocator,
     cli_: *cli.Cli,
     core: *image.Core,
     width: *u32,
@@ -238,6 +238,9 @@ fn ascii_opts(
             };
         } else if (std.mem.eql(u8, opt.long_name, "reverse")) {
             std.mem.reverse(u8, charset.*);
+        } else if (std.mem.eql(u8, opt.long_name, "charset")) {
+            allocator.free(charset.*);
+            charset.* = try allocator.dupe(u8, opt.arg_value.?);
         } else if (std.mem.eql(u8, opt.long_name, "color")) {
             core.toggle_color();
         } else if (std.mem.eql(u8, opt.long_name, "colormode")) {
