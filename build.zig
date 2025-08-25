@@ -32,6 +32,14 @@ pub fn build(b: *std.Build) void {
     });
     exec_mod.addImport("config", config_mod);
 
+    // Usage
+    const usage_mod = b.createModule(.{
+        .root_source_file = b.path("src/usage.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exec_mod.addImport("usage", usage_mod);
+
     // Cli
     const cli_mod = b.createModule(.{
         .root_source_file = b.path("src/cli.zig"),
@@ -40,7 +48,7 @@ pub fn build(b: *std.Build) void {
     });
     exe_mod.addImport("cli", cli_mod);
     exec_mod.addImport("cli", cli_mod);
-    config_mod.addImport("cli", cli_mod);
+    usage_mod.addImport("cli", cli_mod);
     const cli_lib = b.addLibrary(.{
         .linkage = .static,
         .name = "cli",
@@ -107,6 +115,11 @@ pub fn build(b: *std.Build) void {
     stb_lib.installHeadersDirectory(b.path("lib"), "", .{});
     b.installArtifact(stb_lib);
 
+    // Toml
+    const toml = b.dependency("toml", .{ .target = target, .optimize = optimize });
+    const toml_mod = toml.module("toml");
+    config_mod.addImport("toml", toml_mod);
+
     // Build executable
     const exe = b.addExecutable(.{
         .name = "asconv",
@@ -119,13 +132,13 @@ pub fn build(b: *std.Build) void {
 
     // Tests
     const tests = b.addTest(.{
-        // .root_module = exe_mod,
         .root_source_file = b.path("src/tests.zig"),
         .optimize = optimize,
         .target = target,
     });
     tests.root_module.addImport("cli", cli_mod);
     tests.root_module.addImport("exec", exec_mod);
+    tests.root_module.addImport("config", config_mod);
     const run_test_cmd = b.addRunArtifact(tests);
     run_test_cmd.step.dependOn(b.getInstallStep());
 
@@ -134,9 +147,6 @@ pub fn build(b: *std.Build) void {
         run_cmd.addArgs(args);
     }
 
-    // This creates a build step. It will be visible in the `zig build --help` menu,
-    // and can be selected like this: `zig build run`
-    // This will evaluate the `run` step rather than the default, which is "install".
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 

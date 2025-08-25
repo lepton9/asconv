@@ -4,7 +4,12 @@
     .fingerprint = 0xe418a193eb31c225,
     .minimum_zig_version = "0.14.0",
 
-    .dependencies = .{},
+    .dependencies = .{
+        .toml = .{
+            .url = "git+https://github.com/lepton9/zig-toml#7e1e000a86485fb295da540d6dffcd563c9222b5",
+            .hash = "toml-0.3.1-YDcxkhpRAQDjvHzHDkQqSKFSwyiEloGah_WTv2myODm2",
+        },
+    },
 
     .paths = .{
         "build.zig",
