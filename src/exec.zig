@@ -4,14 +4,15 @@ const cmd = cli.cmd;
 const result = @import("result");
 const image = @import("img");
 const utils = @import("utils");
-const config = @import("usage.zig");
+const usage = @import("usage");
+const config = @import("config");
 const term = @import("term.zig");
 const time = image.time;
 const Image = image.Image;
 const ImageRaw = image.ImageRaw;
 
-pub const commands = config.commands;
-pub const options = config.options;
+pub const commands = usage.commands;
+pub const options = usage.options;
 
 pub const ResultImage = result.Result(ImageRaw, result.ErrorWrap);
 
@@ -167,7 +168,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     };
     var height: u32 = @intCast(raw_image.height);
     var width: u32 = @intCast(raw_image.width);
-    var charset: []u8 = try allocator.dupe(u8, config.characters);
+    var charset: []u8 = try allocator.dupe(u8, usage.characters);
     defer allocator.free(charset);
 
     if (try ascii_opts(allocator, cli_, core, &width, &height, &charset)) |err| {

@@ -1,9 +1,34 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const toml = @import("toml");
 const fs = std.fs;
 
 const config_name = "config.toml";
 const appname = "asconv";
+
+pub const Config = struct {
+    table: *toml.Toml,
+    path: []const u8,
+
+    pub fn deinit(self: Config, allocator: std.mem.Allocator) void {
+        self.table.deinit();
+        allocator.free(self.path);
+    }
+};
+
+pub fn get_config(allocator: std.mem.Allocator) !?Config {
+    if (try find_config(allocator)) |path| {
+        errdefer allocator.free(path);
+        const parser = try toml.Parser.init(allocator);
+        defer parser.deinit();
+        const table: *toml.Toml = try parser.parse_file(path);
+        return .{
+            .table = table,
+            .path = path,
+        };
+    }
+    return null;
+}
 
 pub fn find_config(allocator: std.mem.Allocator) !?[]u8 {
     const config = blk: {
@@ -95,8 +120,16 @@ fn get_env(allocator: std.mem.Allocator, env_var: []const u8) ?[]u8 {
 
 test "find" {
     const allocator = std.testing.allocator;
-    const config = try find_config(allocator);
+    const path = try find_config(allocator);
+    if (path) |p| {
+        allocator.free(p);
+    }
+}
+
+test "config" {
+    const allocator = std.testing.allocator;
+    const config = try get_config(allocator);
     if (config) |c| {
-        allocator.free(c);
+        c.deinit(allocator);
     }
 }
