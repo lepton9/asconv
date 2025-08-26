@@ -1,6 +1,6 @@
 # Asconv
 
-Convert images to ascii
+CLI tool to convert images to ascii
 
 ## Build from source
 Compiled binary in `zig-out/bin/asconv`
@@ -8,6 +8,7 @@ Compiled binary in `zig-out/bin/asconv`
 ```
 zig build -Doptimize=ReleaseFast
 ```
+> Omit the `-Doptimize=ReleaseFast` flag for a debug build.
 
 ## Usage
 ```
@@ -24,7 +25,7 @@ help                                     Print help
 ### Options
 ```
 -i, --input       <path>                 Input file or url
--o, --out         <filename>             Path of output file
+-o, --out         <filename>             Path of the output file (omit to output to stdout)
 -w, --width       <int>                  Width of wanted image
 -h, --height      <int>                  Height of wanted image
 -s, --scale       <float>                Scale the image to size
