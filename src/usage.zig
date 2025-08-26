@@ -94,17 +94,17 @@ pub const options = [_]Option{
     .{
         .long_name = "color",
         .short_name = "c",
-        .desc = "Output with ANSI colors",
+        .desc = "Output with ANSI colors and set color range (default: color256)",
         .required = false,
-        .arg = null,
+        .arg = .{ .name = "color256|truecolor", .required = false },
     },
-    .{
-        .long_name = "colormode",
-        .short_name = null,
-        .desc = "Set the range of colors used (default: color256)",
-        .required = false,
-        .arg = .{ .name = "color256|truecolor" },
-    },
+    // .{
+    //     .long_name = "colormode",
+    //     .short_name = null,
+    //     .desc = "Set the range of colors used (default: color256)",
+    //     .required = false,
+    //     .arg = .{ .name = "color256|truecolor" },
+    // },
     .{
         .long_name = "edges",
         .short_name = "e",

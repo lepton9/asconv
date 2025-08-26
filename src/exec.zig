@@ -244,10 +244,11 @@ fn ascii_opts(
             charset.* = try allocator.dupe(u8, opt.arg.?.value.?);
         } else if (std.mem.eql(u8, opt.long_name, "color")) {
             core.toggle_color();
-        } else if (std.mem.eql(u8, opt.long_name, "colormode")) {
-            core.set_color_mode(opt.arg.?.value.?) catch {
-                return result.ErrorWrap.create(ExecError.NoColorModeFound, "{s}", .{opt.arg.?.value.?});
-            };
+            if (opt.arg.?.value) |val| {
+                core.set_color_mode(val) catch {
+                    return result.ErrorWrap.create(ExecError.NoColorModeFound, "{s}", .{val});
+                };
+            }
         } else if (std.mem.eql(u8, opt.long_name, "edges")) {
             core.edge_detection = true;
             if (opt.arg.?.value) |val| {
