@@ -24,6 +24,9 @@ fn handle_cli(cli_result: cli.ResultCli) ?cli.Cli {
             cli.ArgsError.NoOptionValue => {
                 std.log.err("No option value for option '{s}'\n", .{err.get_ctx()});
             },
+            cli.ArgsError.OptionHasNoArg => {
+                std.log.err("Option doesn't take any arguments '{s}'\n", .{err.get_ctx()});
+            },
             cli.ArgsError.NoRequiredOption => {
                 std.log.err("Required options not given: {s}\n", .{err.get_ctx()});
             },
