@@ -250,10 +250,11 @@ fn ascii_opts(
             };
         } else if (std.mem.eql(u8, opt.long_name, "edges")) {
             core.edge_detection = true;
-        } else if (std.mem.eql(u8, opt.long_name, "alg")) {
-            core.set_edge_alg(opt.arg.?.value.?) catch {
-                return result.ErrorWrap.create(ExecError.NoAlgorithmFound, "{s}", .{opt.arg.?.value.?});
-            };
+            if (opt.arg.?.value) |val| {
+                core.set_edge_alg(val) catch {
+                    return result.ErrorWrap.create(ExecError.NoAlgorithmFound, "{s}", .{val});
+                };
+            }
         } else if (std.mem.eql(u8, opt.long_name, "sigma")) {
             core.set_sigma(
                 std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {

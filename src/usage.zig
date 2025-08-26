@@ -108,16 +108,9 @@ pub const options = [_]Option{
     .{
         .long_name = "edges",
         .short_name = "e",
-        .desc = "Edge detection",
+        .desc = "Turn on edge detection and set algorithm (default: sobel)",
         .required = false,
-        .arg = null,
-    },
-    .{
-        .long_name = "alg",
-        .short_name = null,
-        .desc = "Algorithm for edge detection (default: sobel)",
-        .required = false,
-        .arg = .{ .name = "sobel|LoG|DoG" },
+        .arg = .{ .name = "sobel|LoG|DoG", .required = false },
     },
     .{
         .long_name = "sigma",
