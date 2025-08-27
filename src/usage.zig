@@ -98,13 +98,6 @@ pub const options = [_]Option{
         .required = false,
         .arg = .{ .name = "color256|truecolor", .required = false },
     },
-    // .{
-    //     .long_name = "colormode",
-    //     .short_name = null,
-    //     .desc = "Set the range of colors used (default: color256)",
-    //     .required = false,
-    //     .arg = .{ .name = "color256|truecolor" },
-    // },
     .{
         .long_name = "edges",
         .short_name = "e",
@@ -125,5 +118,19 @@ pub const options = [_]Option{
         .desc = "Show the time taken to convert the image",
         .required = false,
         .arg = null,
+    },
+    .{
+        .long_name = "config",
+        .short_name = null,
+        .desc = "Set custom config path to use",
+        .required = false,
+        .arg = .{ .name = "string" },
+    },
+    .{
+        .long_name = "ccharset",
+        .short_name = null,
+        .desc = "Set custom characters that are saved in config",
+        .required = false,
+        .arg = .{ .name = "key" },
     },
 };
