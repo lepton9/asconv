@@ -160,6 +160,7 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
 
 fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     var core = try image.Core.init(allocator);
+    defer core.deinit(allocator);
     var timer_total = try time.Timer.start(&core.perf.total);
     const filename = input_file(cli_) catch |err| {
         return result.ErrorWrap.create(err, "{s}", .{cli_.global_args orelse ""});
@@ -167,7 +168,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     var timer_read = try time.Timer.start(&core.perf.read);
     const img_result = get_input_image(allocator, filename);
     timer_read.stop();
-    const raw_image = img_result.unwrap_try() catch {
+    var raw_image = img_result.unwrap_try() catch {
         return img_result.unwrap_err();
     };
     var height: u32 = @intCast(raw_image.height);
@@ -175,6 +176,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     try core.set_ascii_info(allocator, usage.characters);
 
     if (try ascii_opts(allocator, cli_, core, &width, &height)) |err| {
+        raw_image.deinit();
         return err;
     }
 

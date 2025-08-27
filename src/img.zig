@@ -108,6 +108,7 @@ pub const Core = struct {
 
     pub fn deinit(self: *Core, allocator: std.mem.Allocator) void {
         self.ascii_info.deinit(allocator);
+        allocator.destroy(self);
     }
 
     pub fn set_ascii_info(self: *Core, allocator: std.mem.Allocator, charset: []const u8) !void {
@@ -213,8 +214,6 @@ pub const Image = struct {
         }
         self.allocator.free(self.pixels);
         self.raw_image.deinit();
-        self.core.deinit(self.allocator);
-        self.allocator.destroy(self.core);
         self.allocator.destroy(self.raw_image);
         self.allocator.destroy(self);
     }
