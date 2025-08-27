@@ -1,6 +1,6 @@
 .{
     .name = .asconv,
-    .version = "0.2.0",
+    .version = "0.3.0",
     .fingerprint = 0xe418a193eb31c225,
     .minimum_zig_version = "0.14.0",
 

@@ -129,7 +129,7 @@ pub const options = [_]Option{
     .{
         .long_name = "ccharset",
         .short_name = null,
-        .desc = "Set custom characters that are saved in config",
+        .desc = "Use custom characters that are saved in the config",
         .required = false,
         .arg = .{ .name = "key" },
     },

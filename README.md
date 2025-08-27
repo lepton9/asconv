@@ -37,6 +37,20 @@ help                                     Print help
 -e, --edges       <?sobel|LoG|DoG>       Turn on edge detection and set algorithm (default: sobel)
     --sigma       <float>                Sigma value for DoG and LoG (default: 1.0)
 -t, --time                               Show the time taken to convert the image
+    --config      <string>               Set custom config path to use
+    --ccharset    <key>                  Use custom characters that are saved in the config
 ```
 > Option arguments prefixed with `?` are optional.
+
+## Config
+The config is stored in a `TOML` file. The file `config.toml` can be placed in standard config directories based on the operating system. For instance, on Linux, it can be located at `~/.config/asconv/config.toml`.
+
+#### Example:
+```toml
+# config.toml
+
+[charsets]
+
+utf = "░▒▓"
+```
 
