@@ -29,6 +29,9 @@ pub const ExecError = error{
     NoInputFile,
     NoAlgorithmFound,
     NoColorModeFound,
+    NoConfigFound,
+    NoConfigTable,
+    NoConfigCharset,
     FetchError,
     InvalidUrl,
 };
@@ -208,6 +211,22 @@ fn ascii_opts(
     height: *u32,
     charset: *[]u8,
 ) !?result.ErrorWrap {
+    const config_path: ?[]const u8 = blk: {
+        if (cli_.find_opt("config")) |opt| {
+            break :blk opt.arg.?.value.?;
+        }
+        break :blk null;
+    };
+    const conf: ?config.Config = blk: {
+        if (config_path) |path| {
+            if (try config.get_config_from_path(allocator, path)) |c| {
+                break :blk c;
+            }
+            return result.ErrorWrap.create(ExecError.NoConfigFound, "{s}", .{path});
+        } else break :blk try config.get_config(allocator);
+    };
+    defer if (conf) |c| c.deinit(allocator);
+
     for (cli_.args.?.items) |*opt| {
         if (std.mem.eql(u8, opt.long_name, "height")) {
             height.* = std.fmt.parseInt(u32, opt.arg.?.value.?, 10) catch {
@@ -262,6 +281,27 @@ fn ascii_opts(
                     return result.ErrorWrap.create(ExecError.ParseErrorSigma, "{s}", .{opt.arg.?.value.?});
                 },
             );
+        } else if (std.mem.eql(u8, opt.long_name, "ccharset")) {
+            if (conf) |c| {
+                const charsets = c.table.get_table().get("charsets");
+                if (charsets == null or charsets.? != .table)
+                    return result.ErrorWrap.create(ExecError.NoConfigTable, "charsets", .{});
+                const cs = charsets.?.get(opt.arg.?.value.?);
+                if (cs == null or cs.? != .string)
+                    return result.ErrorWrap.create(
+                        ExecError.NoConfigCharset,
+                        "{s}",
+                        .{opt.arg.?.value.?},
+                    );
+                allocator.free(charset.*);
+                charset.* = try allocator.dupe(u8, cs.?.string);
+            } else {
+                return result.ErrorWrap.create(
+                    ExecError.NoConfigFound,
+                    "{s}",
+                    .{config_path orelse "default_path"},
+                );
+            }
         }
     }
     return null;

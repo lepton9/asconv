@@ -83,10 +83,19 @@ fn handle_exec_error(err: result.ErrorWrap) void {
             std.log.err("No colormode '{s}'", .{err.get_ctx()});
         },
         exec.ExecError.FetchError => {
-            std.log.err("Failed to fetch image {s}", .{err.get_ctx()});
+            std.log.err("Failed to fetch image '{s}'", .{err.get_ctx()});
         },
         exec.ExecError.InvalidUrl => {
-            std.log.err("Invalid url {s}", .{err.get_ctx()});
+            std.log.err("Invalid url '{s}'", .{err.get_ctx()});
+        },
+        exec.ExecError.NoConfigFound => {
+            std.log.err("No config found '{s}'", .{err.get_ctx()});
+        },
+        exec.ExecError.NoConfigTable => {
+            std.log.err("No table in config '{s}'", .{err.get_ctx()});
+        },
+        exec.ExecError.NoConfigCharset => {
+            std.log.err("No charset in config with key '{s}'", .{err.get_ctx()});
         },
         else => {
             std.log.err("Error: '{s}'", .{err.get_ctx()});
