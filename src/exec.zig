@@ -171,17 +171,15 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     };
     var height: u32 = @intCast(raw_image.height);
     var width: u32 = @intCast(raw_image.width);
-    var charset: []u8 = try allocator.dupe(u8, usage.characters);
-    defer allocator.free(charset);
+    try core.set_ascii_info(allocator, usage.characters);
 
-    if (try ascii_opts(allocator, cli_, core, &width, &height, &charset)) |err| {
+    if (try ascii_opts(allocator, cli_, core, &width, &height)) |err| {
         return err;
     }
 
     var img = try Image.init(allocator, height, width);
     defer Image.deinit(img);
     img.core = core;
-    try img.set_ascii_info(charset);
     if (core.edge_detection) try img.set_edge_detection();
     img.set_raw_image(raw_image, filename);
     try img.fit_image();
@@ -209,7 +207,6 @@ fn ascii_opts(
     core: *image.Core,
     width: *u32,
     height: *u32,
-    charset: *[]u8,
 ) !?result.ErrorWrap {
     const config_path: ?[]const u8 = blk: {
         if (cli_.find_opt("config")) |opt| {
@@ -257,10 +254,9 @@ fn ascii_opts(
                 return result.ErrorWrap.create(ExecError.ParseErrorBrightness, "{s}", .{opt.arg.?.value.?});
             };
         } else if (std.mem.eql(u8, opt.long_name, "reverse")) {
-            std.mem.reverse(u8, charset.*);
+            try core.ascii_info.reverse(allocator);
         } else if (std.mem.eql(u8, opt.long_name, "charset")) {
-            allocator.free(charset.*);
-            charset.* = try allocator.dupe(u8, opt.arg.?.value.?);
+            try core.set_ascii_info(allocator, opt.arg.?.value.?);
         } else if (std.mem.eql(u8, opt.long_name, "color")) {
             core.toggle_color();
             if (opt.arg.?.value) |val| {
@@ -293,8 +289,7 @@ fn ascii_opts(
                         "{s}",
                         .{opt.arg.?.value.?},
                     );
-                allocator.free(charset.*);
-                charset.* = try allocator.dupe(u8, cs.?.string);
+                try core.set_ascii_info(allocator, cs.?.string);
             } else {
                 return result.ErrorWrap.create(
                     ExecError.NoConfigFound,
