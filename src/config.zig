@@ -16,6 +16,23 @@ pub const Config = struct {
     }
 };
 
+pub fn get_config_from_path(allocator: std.mem.Allocator, path: []const u8) !?Config {
+    const file: ?fs.File = blk: {
+        break :blk fs.cwd().openFile(path, .{}) catch null;
+    };
+    if (file) |f| {
+        f.close();
+        const parser = try toml.Parser.init(allocator);
+        defer parser.deinit();
+        const table: *toml.Toml = try parser.parse_file(path);
+        return .{
+            .table = table,
+            .path = try allocator.dupe(u8, path),
+        };
+    }
+    return null;
+}
+
 pub fn get_config(allocator: std.mem.Allocator) !?Config {
     if (try find_config(allocator)) |path| {
         errdefer allocator.free(path);
