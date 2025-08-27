@@ -19,17 +19,22 @@ pub const AsciiInfo = struct {
 
     pub fn init(allocator: std.mem.Allocator, ascii_chars: []const u8) !*AsciiInfo {
         var info = try allocator.create(AsciiInfo);
-        try info.set_charset(allocator, ascii_chars);
+        try info.init_charset(allocator, ascii_chars);
         return info;
     }
 
     pub fn deinit(self: *AsciiInfo, allocator: std.mem.Allocator) void {
+        allocator.free(self.char_table);
         allocator.free(self.char_info);
         allocator.destroy(self);
     }
 
-    pub fn set_charset(self: *AsciiInfo, allocator: std.mem.Allocator, ascii_chars: []const u8) !void {
-        self.char_table = ascii_chars;
+    pub fn init_charset(
+        self: *AsciiInfo,
+        allocator: std.mem.Allocator,
+        ascii_chars: []const u8,
+    ) !void {
+        self.char_table = try allocator.dupe(u8, ascii_chars);
         var char_info = std.ArrayList(AsciiCharInfo).init(allocator);
         defer char_info.deinit();
         var i: usize = 0;
@@ -42,9 +47,31 @@ pub const AsciiInfo = struct {
         self.char_info = try char_info.toOwnedSlice();
     }
 
+    pub fn set_charset(
+        self: *AsciiInfo,
+        allocator: std.mem.Allocator,
+        ascii_chars: []const u8,
+    ) !void {
+        allocator.free(self.char_table);
+        allocator.free(self.char_info);
+        try self.init_charset(allocator, ascii_chars);
+    }
+
     pub fn select_char(self: *AsciiInfo, index: usize) []const u8 {
         const char_info: AsciiCharInfo = self.char_info[@min(index, self.char_info.len - 1)];
         return self.char_table[char_info.start .. char_info.start + char_info.len];
+    }
+
+    pub fn reverse(self: *AsciiInfo, allocator: std.mem.Allocator) !void {
+        var reversed = std.ArrayList(u8).init(allocator);
+        defer reversed.deinit();
+        var i = self.char_info.len;
+        while (i > 0) {
+            i -= 1;
+            const info = self.char_info[i];
+            try reversed.appendSlice(self.char_table[info.start .. info.start + info.len]);
+        }
+        try self.set_charset(allocator, reversed.items);
     }
 };
 
@@ -83,8 +110,7 @@ pub const Core = struct {
         self.ascii_info.deinit(allocator);
     }
 
-    fn set_ascii_info(self: *Core, allocator: std.mem.Allocator, charset: []const u8) !void {
-        allocator.free(self.ascii_info.char_info);
+    pub fn set_ascii_info(self: *Core, allocator: std.mem.Allocator, charset: []const u8) !void {
         try self.ascii_info.set_charset(allocator, charset);
     }
 
@@ -753,11 +779,10 @@ fn rgb_to_ansi256(r_: u8, g_: u8, b_: u8) u8 {
 
 fn append_256_color(buffer: *std.ArrayList(u8), char: []const u8, p: u32) !void {
     var buf: [64]u8 = undefined;
-    const idx = rgb_to_ansi256(r(p), g(p), b(p));
     try buffer.appendSlice(try std.fmt.bufPrint(
         &buf,
         "\x1b[38;5;{d}m{s}{s}\x1b[0m",
-        .{ idx, char, char },
+        .{ rgb_to_ansi256(r(p), g(p), b(p)), char, char },
     ));
 }
 
