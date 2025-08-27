@@ -107,12 +107,13 @@ fn get_input_image(allocator: std.mem.Allocator, filepath: []const u8) ResultIma
     };
 
     if (input_url) {
-        const fetched_content = fetch_url_content(allocator, filepath) catch |err| {
+        const content = fetch_url_content(allocator, filepath) catch |err| {
             return ResultImage.wrap_err(
                 result.ErrorWrap.create(err, "{s}", .{filepath}),
             );
         };
-        const raw_image = image.load_image_from_memory(fetched_content) catch {
+        defer allocator.free(content);
+        const raw_image = image.load_image_from_memory(content) catch {
             return ResultImage.wrap_err(
                 result.ErrorWrap.create(ExecError.FileLoadErrorMem, "", .{}),
             );
