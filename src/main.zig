@@ -107,20 +107,20 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var alloc = gpa.allocator();
 
-    const app = try cmd.ArgsStructure.init(&alloc);
-    defer app.deinit(&alloc);
-    app.cmd_required = true;
-    app.set_commands(&exec.commands);
-    app.set_options(&exec.options);
+    const app = comptime cmd.ArgsStructure{
+        .cmd_required = true,
+        .commands = &exec.commands,
+        .options = &exec.options,
+    };
 
     var args_str = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args_str);
     const args = try arg.parse_args(alloc, args_str[1..]);
     defer alloc.free(args);
 
-    const cli_result = cli.validate_parsed_args(args, app);
+    const cli_result = cli.validate_parsed_args(args, &app);
     var cli_ = handle_cli(cli_result) orelse return;
 
-    const err = try exec.cmd_func(alloc, &cli_, app);
+    const err = try exec.cmd_func(alloc, &cli_, &app);
     if (err) |e| handle_exec_error(e);
 }

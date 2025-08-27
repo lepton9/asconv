@@ -330,7 +330,7 @@ fn show_performance(allocator: std.mem.Allocator, perf: time.Time) !void {
     try write_to_stdio(buffer.items);
 }
 
-fn help(allocator: std.mem.Allocator, args_struct: *cmd.ArgsStructure) !void {
+fn help(allocator: std.mem.Allocator, args_struct: *const cmd.ArgsStructure) !void {
     var buf = std.ArrayList(u8).init(allocator);
     defer buf.deinit();
     try buf.appendSlice("Usage: asconv [command] [options]\n\n");
@@ -340,7 +340,7 @@ fn help(allocator: std.mem.Allocator, args_struct: *cmd.ArgsStructure) !void {
     try write_to_stdio(buf.items);
 }
 
-pub fn cmd_func(allocator: std.mem.Allocator, cli_: *cli.Cli, args_struct: *cmd.ArgsStructure) !?result.ErrorWrap {
+pub fn cmd_func(allocator: std.mem.Allocator, cli_: *cli.Cli, args_struct: *const cmd.ArgsStructure) !?result.ErrorWrap {
     if (cli_.cmd == null) {
         std.log.info("No command", .{});
         return null;
