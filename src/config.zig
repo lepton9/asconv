@@ -49,7 +49,7 @@ pub fn get_config(allocator: std.mem.Allocator) !?Config {
 
 pub fn find_config(allocator: std.mem.Allocator) !?[]u8 {
     const config = blk: {
-        if (builtin.os.tag == .linux or std.builtin.os.tag == .freebsd)
+        if (builtin.os.tag == .linux or builtin.os.tag == .freebsd)
             break :blk try find_config_linux(allocator);
         if (builtin.os.tag == .windows)
             break :blk try find_config_windows(allocator);
