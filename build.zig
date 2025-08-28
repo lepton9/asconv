@@ -138,7 +138,6 @@ pub fn build(b: *std.Build) void {
     });
     tests.root_module.addImport("cli", cli_mod);
     tests.root_module.addImport("exec", exec_mod);
-    tests.root_module.addImport("config", config_mod);
     const run_test_cmd = b.addRunArtifact(tests);
     run_test_cmd.step.dependOn(b.getInstallStep());
 
