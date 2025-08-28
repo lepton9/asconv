@@ -34,7 +34,7 @@ fn term_size_windows() !TermSize {
     const win = std.os.windows;
     var info: std.os.windows.CONSOLE_SCREEN_BUFFER_INFO = undefined;
 
-    if (win.kernel32.GetConsoleScreenBufferInfo(win.STD_OUTPUT_HANDLE, &info) == win.FALSE)
+    if (win.kernel32.GetConsoleScreenBufferInfo(try win.GetStdHandle(win.STD_OUTPUT_HANDLE), &info) == win.FALSE)
         switch (win.kernel32.GetLastError()) {
             else => |e| return win.unexpectedError(e),
         };
