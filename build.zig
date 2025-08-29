@@ -132,7 +132,7 @@ pub fn build(b: *std.Build) void {
 
     // Tests
     const tests = b.addTest(.{
-        .root_source_file = b.path("src/tests.zig"),
+        .root_source_file = b.path("src/tests/tests.zig"),
         .optimize = optimize,
         .target = target,
     });
