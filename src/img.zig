@@ -1,5 +1,5 @@
 const std = @import("std");
-const stb = @import("stb_image");
+const stb = @import("stb");
 const utils = @import("utils");
 pub const time = @import("time.zig");
 const itof = utils.itof;

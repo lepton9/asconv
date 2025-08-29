@@ -97,18 +97,20 @@ pub fn build(b: *std.Build) void {
     exec_mod.addImport("utils", utils_mod);
     cli_mod.addImport("utils", utils_mod);
 
-    // Stb_image
-    const stb_mod = b.addModule("stb_image", .{
-        .root_source_file = b.path("src/stb_image.zig"),
+    // Stb
+    const stb_mod = b.addModule("stb", .{
+        .root_source_file = b.path("src/stb.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
+    const stb_dep = b.dependency("stb", .{ .target = target, .optimize = optimize });
+    stb_mod.addIncludePath(stb_dep.path(""));
     stb_mod.addIncludePath(b.path("lib"));
-    stb_mod.addCSourceFile(.{ .file = b.path("lib/stb_image.c"), .flags = CFlags });
-    img_mod.addImport("stb_image", stb_mod);
+    stb_mod.addCSourceFile(.{ .file = b.path("lib/stb.c"), .flags = CFlags });
+    img_mod.addImport("stb", stb_mod);
     const stb_lib = b.addLibrary(.{
-        .name = "stb-image",
+        .name = "stb",
         .root_module = stb_mod,
         .linkage = linkage,
     });

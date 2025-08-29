@@ -1,13 +1,17 @@
 .{
     .name = .asconv,
-    .version = "0.3.0",
+    .version = "0.3.1",
     .fingerprint = 0xe418a193eb31c225,
     .minimum_zig_version = "0.14.0",
 
     .dependencies = .{
         .toml = .{
-            .url = "git+https://github.com/lepton9/zig-toml#7e1e000a86485fb295da540d6dffcd563c9222b5",
-            .hash = "toml-0.3.1-YDcxkhpRAQDjvHzHDkQqSKFSwyiEloGah_WTv2myODm2",
+            .url = "git+https://github.com/lepton9/zig-toml#993234e908b189f47f7a8a432133742409d4a3ff",
+            .hash = "toml-0.3.2-YDcxkltQAQCH3uyX7jB2L4K4Wnr7lBLHNfghetbo6lLD",
+        },
+        .stb = .{
+            .url = "git+https://github.com/nothings/stb.git?ref=master#f58f558c120e9b32c217290b80bad1a0729fbb2c",
+            .hash = "N-V-__8AAO8tTgBJoAbyWoWhdnNsGrx_ql6PT0ZLfoz2ms6b",
         },
     },
 
