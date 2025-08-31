@@ -6,8 +6,8 @@
 
     .dependencies = .{
         .toml = .{
-            .url = "git+https://github.com/lepton9/zig-toml#993234e908b189f47f7a8a432133742409d4a3ff",
-            .hash = "toml-0.3.2-YDcxkltQAQCH3uyX7jB2L4K4Wnr7lBLHNfghetbo6lLD",
+            .url = "git+https://github.com/lepton9/zig-toml#5411a1ec40fe29e69d48a9f023b2a6d02d278767",
+            .hash = "toml-0.3.2-YDcxkpxQAQDc_AOzx7KeNpc2iXwGT-2jVYLuYka1lWox",
         },
         .stb = .{
             .url = "git+https://github.com/nothings/stb.git?ref=master#f58f558c120e9b32c217290b80bad1a0729fbb2c",

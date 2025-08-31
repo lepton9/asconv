@@ -134,9 +134,11 @@ pub fn build(b: *std.Build) void {
 
     // Tests
     const tests = b.addTest(.{
-        .root_source_file = b.path("src/tests/tests.zig"),
-        .optimize = optimize,
-        .target = target,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/tests/tests.zig"),
+            .optimize = optimize,
+            .target = target,
+        }),
     });
     tests.root_module.addImport("cli", cli_mod);
     tests.root_module.addImport("exec", exec_mod);
