@@ -183,7 +183,7 @@ pub const Image = struct {
     name: []const u8,
     height: u32,
     width: u32,
-    pixels: [][]u32,
+    pixels: []u32,
     raw_image: *ImageRaw = undefined,
     edges: ?EdgeData = null,
     core: *Core = undefined,
@@ -195,11 +195,8 @@ pub const Image = struct {
         img.height = height;
         img.width = width;
         img.edges = null;
-        img.pixels = try allocator.alloc([]u32, height);
-        for (img.pixels) |*row| {
-            row.* = try allocator.alloc(u32, width);
-            @memset(row.*, 0);
-        }
+        img.pixels = try allocator.alloc(u32, height * width);
+        @memset(img.pixels, 0);
         img.raw_image = try allocator.create(ImageRaw);
         img.raw_image.* = ImageRaw{};
         return img;
@@ -208,9 +205,6 @@ pub const Image = struct {
     pub fn deinit(self: *Image) void {
         if (self.edges) |edges| {
             edges.deinit(self.allocator);
-        }
-        for (self.pixels) |row| {
-            self.allocator.free(row);
         }
         self.allocator.free(self.pixels);
         self.raw_image.deinit();
@@ -223,11 +217,8 @@ pub const Image = struct {
             self.allocator.free(row);
         }
         self.allocator.free(self.pixels);
-        self.pixels = try self.allocator.alloc([]u32, height);
-        for (self.pixels) |*row| {
-            row.* = try self.allocator.alloc(u32, width);
-            @memset(row.*, 0);
-        }
+        self.pixels = try self.allocator.alloc(u32, height * width);
+        @memset(self.pixels, 0);
         if (self.edges) |*edges| {
             try edges.resize(self.allocator, height, width);
         }
@@ -255,7 +246,7 @@ pub const Image = struct {
     pub fn fit_image(self: *Image) !void {
         if (self.raw_image.data == null) return error.NoImageData;
         var timer_scaling = try time.Timer.start(&self.core.perf.scaling);
-        const pixels: [][]u32 = try convert_to_pixel_matrix(self.allocator, self.raw_image);
+        const pixels: []u32 = try convert_to_pixel_matrix(self.allocator, self.raw_image);
         defer free_pixel_mat(pixels, self.allocator);
         scale_nearest(
             pixels,
@@ -298,7 +289,7 @@ pub const Image = struct {
                 return c;
             }
         }
-        return self.pixel_to_char(self.pixels[y][x]);
+        return self.pixel_to_char(self.pixels[y * self.width + x]);
     }
 
     fn pixel_to_ascii(
@@ -309,8 +300,8 @@ pub const Image = struct {
     ) !void {
         const c: []const u8 = self.get_char(x, y);
         if (self.core.color) switch (self.core.color_mode) {
-            .color256 => try append_256_color(buffer, c, self.pixels[y][x]),
-            .truecolor => try append_truecolor(buffer, c, self.pixels[y][x]),
+            .color256 => try append_256_color(buffer, c, self.pixels[y * self.width + x]),
+            .truecolor => try append_truecolor(buffer, c, self.pixels[y * self.width + x]),
         } else {
             try buffer.appendSlice(c);
             try buffer.appendSlice(c);
@@ -333,37 +324,37 @@ pub const Image = struct {
 };
 
 fn scale_nearest(
-    src: [][]u32,
-    dst: [][]u32,
+    src: []u32,
+    dst: []u32,
     src_width: usize,
     src_height: usize,
     dst_width: usize,
     dst_height: usize,
 ) void {
-    for (dst, 0..) |*dst_row, y| {
-        for (dst_row.*, 0..) |*dst_pixel, x| {
+    for (0..dst_height) |y| {
+        for (0..dst_width) |x| {
             const src_x = @min(src_width - 1, (x * src_width) / dst_width);
             const src_y = @min(src_height - 1, (y * src_height) / dst_height);
-            dst_pixel.* = src[src_y][src_x];
+            dst[y * dst_width + x] = src[src_y * src_width + src_x];
         }
     }
 }
 
 fn scale_bilinear(
-    src: [][]u32,
-    dst: [][]u32,
+    src: []u32,
+    dst: []u32,
     src_width: usize,
     src_height: usize,
     dst_width: usize,
     dst_height: usize,
 ) void {
-    for (dst, 0..) |*dst_row, y| {
+    for (0..dst_height) |y| {
         const fy: f64 = (itof(f64, y) * itof(f64, src_height)) / itof(f64, dst_height);
         const y0: usize = @min(src_height - 1, ftoi(usize, fy));
         const y1: usize = @min(src_height - 1, y0 + 1);
         const wy: f64 = fy - itof(f64, y0);
 
-        for (dst_row.*, 0..) |*dst_pixel, x| {
+        for (0..dst_width) |x| {
             const fx: f64 = (itof(f64, x) * itof(f64, src_width)) / itof(f64, dst_width);
             const x0: usize = @min(src_width - 1, ftoi(usize, fx));
             const x1: usize = @min(src_width - 1, x0 + 1);
@@ -382,7 +373,7 @@ fn scale_bilinear(
                 const value: f64 = (1.0 - wy) * top + wy * bot;
                 result[i] = @intFromFloat(std.math.clamp(value, 0.0, 255.0));
             }
-            dst_pixel.* = pack_rgba(result);
+            dst[y * dst_width + x] = pack_rgba(result);
         }
     }
 }
@@ -446,41 +437,39 @@ fn pack_rgba(rgba: [4]u8) u32 {
         @as(u32, rgba[3]);
 }
 
-pub fn convert_to_pixel_matrix(allocator: std.mem.Allocator, image: *ImageRaw) ![][]u32 {
+pub fn convert_to_pixel_matrix(allocator: std.mem.Allocator, image: *ImageRaw) ![]u32 {
     const w: usize = @intCast(image.width);
     const h: usize = @intCast(image.height);
     const channels: usize = @intCast(image.nchan);
-    const pixels = try allocator.alloc([]u32, h);
+    const pixels = try allocator.alloc(u32, h * w);
     var r_v: u8, var g_v: u8, var b_v: u8, var a_v: u8 = .{ 0, 0, 0, 0 };
 
-    for (pixels, 0..) |*row, y| {
-        row.* = try allocator.alloc(u32, w);
-        for (row.*, 0..) |*pixel, x| {
+    for (0..h) |y| {
+        for (0..w) |x| {
             const base = (y * w + x) * channels;
             r_v = image.data.?[base];
             g_v = if (channels > 1) image.data.?[base + 1] else r_v;
             b_v = if (channels > 2) image.data.?[base + 2] else r_v;
             a_v = if (channels > 3) image.data.?[base + 3] else 0xFF;
-            pixel.* = pack_rgba(.{ r_v, g_v, b_v, a_v });
+            pixels[y * w + x] = pack_rgba(.{ r_v, g_v, b_v, a_v });
         }
     }
     return pixels;
 }
 
-pub fn free_pixel_mat(pixels: [][]u32, allocator: std.mem.Allocator) void {
-    for (pixels) |row| allocator.free(row);
+pub fn free_pixel_mat(pixels: []u32, allocator: std.mem.Allocator) void {
     allocator.free(pixels);
 }
 
 fn gray_scale_filter(
-    pixels: [][]u32,
+    pixels: []u32,
     output: []u8,
     width: usize,
     height: usize,
 ) void {
     for (1..height) |y| {
         for (1..width) |x| {
-            output[y * width + x] = gray_scale_avg(pixels[y][x]);
+            output[y * width + x] = gray_scale_avg(pixels[y * width + x]);
         }
     }
 }
@@ -504,7 +493,7 @@ fn calc_edges(
     allocator: std.mem.Allocator,
     core: Core,
     edges: EdgeData,
-    pixels: [][]u32,
+    pixels: []u32,
     width: usize,
     height: usize,
 ) !void {
