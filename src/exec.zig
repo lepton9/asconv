@@ -4,6 +4,7 @@ const cmd = cli.cmd;
 const result = @import("result");
 const corelib = @import("core");
 const image = @import("img");
+const video = @import("video");
 const utils = @import("utils");
 const usage = @import("usage");
 const config = @import("config");
@@ -48,7 +49,7 @@ fn input_file(cli_: *cli.Cli) ![]const u8 {
     return input orelse ExecError.NoInputFile;
 }
 
-fn output_file(cli_: *cli.Cli) ?[]const u8 {
+fn output_path(cli_: *cli.Cli) ?[]const u8 {
     const option = cli_.find_opt("out");
     if (option) |opt| {
         return opt.arg.?.value.?;
@@ -158,29 +159,42 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     return null;
 }
 
-fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
-    var core = try corelib.Core.init(allocator);
-    defer core.deinit(allocator);
-    var timer_total = try time.Timer.start(&core.perf.total);
-    const filename = input_file(cli_) catch |err| {
-        return result.ErrorWrap.create(err, "{s}", .{cli_.global_args orelse ""});
-    };
+fn ascii_video(
+    allocator: std.mem.Allocator,
+    cli_: *cli.Cli,
+    core: *corelib.Core,
+    filename: []const u8,
+) !void {
+    if (try ascii_opts(allocator, cli_, core)) |_| {
+        return;
+    }
+    const output = output_path(cli_);
+    try video.process_video(allocator, core, filename, output);
+}
+
+fn ascii_image(
+    allocator: std.mem.Allocator,
+    cli_: *cli.Cli,
+    core: *corelib.Core,
+    filename: []const u8,
+) !?result.ErrorWrap {
     var timer_read = try time.Timer.start(&core.perf.read);
     const img_result = get_input_image(allocator, filename);
     timer_read.stop();
     var raw_image = img_result.unwrap_try() catch {
         return img_result.unwrap_err();
     };
-    var height: u32 = @intCast(raw_image.height);
-    var width: u32 = @intCast(raw_image.width);
-    try core.set_ascii_info(allocator, usage.characters);
 
     if (try ascii_opts(allocator, cli_, core)) |err| {
         raw_image.deinit();
         return err;
     }
 
-    var img = try Image.init(allocator, height, width);
+    var height: usize = @intCast(raw_image.height);
+    var width: usize = @intCast(raw_image.width);
+    try core.apply_scale(&width, &height);
+
+    var img = try Image.init(allocator, @intCast(height), @intCast(width));
     defer Image.deinit(img);
     img.core = core;
     if (core.edge_detection) try img.set_edge_detection();
@@ -189,7 +203,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
 
     const data = try img.to_ascii();
     defer allocator.free(data);
-    const file = output_file(cli_);
+    const file = output_path(cli_);
     var timer_print = try time.Timer.start(&core.perf.write);
     if (file) |path| {
         try write_to_file(path, data);
@@ -197,6 +211,23 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
         try write_to_stdio(data);
     }
     timer_print.stop();
+    return null;
+}
+
+fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli, file_type: corelib.MediaType) !?result.ErrorWrap {
+    var core = try corelib.Core.init(allocator);
+    defer core.deinit(allocator);
+    var timer_total = try time.Timer.start(&core.perf.total);
+    const filename = input_file(cli_) catch |err| {
+        return result.ErrorWrap.create(err, "{s}", .{cli_.global_args orelse ""});
+    };
+    try core.set_ascii_info(allocator, usage.characters);
+    switch (file_type) {
+        .Video => try ascii_video(allocator, cli_, core, filename),
+        else => {
+            if (try ascii_image(allocator, cli_, core, filename)) |err| return err;
+        },
+    }
     timer_total.stop();
     if (cli_.find_opt("time")) |_| {
         try show_performance(allocator, core.perf);
@@ -337,7 +368,9 @@ pub fn cmd_func(allocator: std.mem.Allocator, cli_: *cli.Cli, args_struct: *cons
     if (std.mem.eql(u8, cmd_name, "size")) {
         return try size(allocator, cli_);
     } else if (std.mem.eql(u8, cmd_name, "ascii")) {
-        return try ascii(allocator, cli_);
+        return try ascii(allocator, cli_, .Image);
+    } else if (std.mem.eql(u8, cmd_name, "asciivid")) {
+        return try ascii(allocator, cli_, .Video);
     } else if (std.mem.eql(u8, cmd_name, "compress")) {
         return null;
     } else if (std.mem.eql(u8, cmd_name, "help")) {

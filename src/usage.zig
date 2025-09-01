@@ -7,7 +7,12 @@ pub const characters = " .-:=+iltIcsv1x%7aejorzfnuCJT3*69LYpqy25SbdgFGOVXkPhmw48
 pub const commands = [_]Cmd{
     .{
         .name = "ascii",
-        .desc = "Convert to ascii",
+        .desc = "Convert image to ascii",
+        .options = null,
+    },
+    .{
+        .name = "asciivid",
+        .desc = "Convert video to ascii",
         .options = null,
     },
     .{

@@ -8,6 +8,12 @@ const ftoi = utils.ftoi;
 const base_gaussian_sigma: f32 = 1.0;
 const base_char_table = " .,:;ox%#@";
 
+pub const MediaType = enum {
+    Video,
+    Image,
+    Unknown,
+};
+
 pub const ColorMode = enum {
     truecolor,
     color256,
