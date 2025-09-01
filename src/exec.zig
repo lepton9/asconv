@@ -2,12 +2,13 @@ const std = @import("std");
 const cli = @import("cli");
 const cmd = cli.cmd;
 const result = @import("result");
+const corelib = @import("core");
 const image = @import("img");
 const utils = @import("utils");
 const usage = @import("usage");
 const config = @import("config");
 const term = @import("term.zig");
-const time = image.time;
+const time = corelib.time;
 const Image = image.Image;
 const ImageRaw = image.ImageRaw;
 
@@ -134,7 +135,7 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
         return result.ErrorWrap.create(err, "{s}", .{cli_.global_args orelse ""});
     };
     const img = try Image.init(allocator, 0, 0);
-    img.core = try image.Core.init(allocator);
+    img.core = try corelib.Core.init(allocator);
     defer Image.deinit(img);
 
     const img_result = get_input_image(allocator, filename);
@@ -159,7 +160,7 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
 }
 
 fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
-    var core = try image.Core.init(allocator);
+    var core = try corelib.Core.init(allocator);
     defer core.deinit(allocator);
     var timer_total = try time.Timer.start(&core.perf.total);
     const filename = input_file(cli_) catch |err| {
@@ -207,7 +208,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
 fn ascii_opts(
     allocator: std.mem.Allocator,
     cli_: *cli.Cli,
-    core: *image.Core,
+    core: *corelib.Core,
     width: *u32,
     height: *u32,
 ) !?result.ErrorWrap {
@@ -244,7 +245,7 @@ fn ascii_opts(
             width.* = @intFromFloat(utils.itof(f32, width.*) * core.scale);
         } else if (std.mem.eql(u8, opt.long_name, "fit")) {
             const term_size = try term.get_term_size();
-            core.scale = image.get_scale(
+            core.scale = corelib.get_scale(
                 @intCast(width.*),
                 @intCast(height.*),
                 term_size.width,

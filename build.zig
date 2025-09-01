@@ -56,6 +56,20 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(cli_lib);
 
+    // Core
+    const core_mod = b.addModule("core", .{
+        .root_source_file = b.path("src/core.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exec_mod.addImport("core", core_mod);
+    const core_lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = "core",
+        .root_module = core_mod,
+    });
+    b.installArtifact(core_lib);
+
     // Image
     const img_mod = b.createModule(.{
         .root_source_file = b.path("src/img.zig"),
@@ -63,12 +77,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exec_mod.addImport("img", img_mod);
-    const img_lib = b.addLibrary(.{
-        .linkage = .static,
-        .name = "img",
-        .root_module = img_mod,
+    img_mod.addImport("core", core_mod);
     });
-    b.installArtifact(img_lib);
 
     // Result
     const result_mod = b.createModule(.{
@@ -92,7 +102,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    img_mod.addImport("utils", utils_mod);
+    core_mod.addImport("utils", utils_mod);
     exe_mod.addImport("utils", utils_mod);
     exec_mod.addImport("utils", utils_mod);
     cli_mod.addImport("utils", utils_mod);
