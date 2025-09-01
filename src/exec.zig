@@ -7,7 +7,6 @@ const image = @import("img");
 const utils = @import("utils");
 const usage = @import("usage");
 const config = @import("config");
-const term = @import("term.zig");
 const time = corelib.time;
 const Image = image.Image;
 const ImageRaw = image.ImageRaw;
@@ -176,7 +175,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     var width: u32 = @intCast(raw_image.width);
     try core.set_ascii_info(allocator, usage.characters);
 
-    if (try ascii_opts(allocator, cli_, core, &width, &height)) |err| {
+    if (try ascii_opts(allocator, cli_, core)) |err| {
         raw_image.deinit();
         return err;
     }
@@ -209,8 +208,6 @@ fn ascii_opts(
     allocator: std.mem.Allocator,
     cli_: *cli.Cli,
     core: *corelib.Core,
-    width: *u32,
-    height: *u32,
 ) !?result.ErrorWrap {
     const config_path: ?[]const u8 = blk: {
         if (cli_.find_opt("config")) |opt| {
@@ -230,29 +227,19 @@ fn ascii_opts(
 
     for (cli_.args.?.items) |*opt| {
         if (std.mem.eql(u8, opt.long_name, "height")) {
-            height.* = std.fmt.parseInt(u32, opt.arg.?.value.?, 10) catch {
+            core.height = std.fmt.parseInt(u32, opt.arg.?.value.?, 10) catch {
                 return result.ErrorWrap.create(ExecError.ParseErrorHeight, "{s}", .{opt.arg.?.value.?});
             };
         } else if (std.mem.eql(u8, opt.long_name, "width")) {
-            width.* = std.fmt.parseInt(u32, opt.arg.?.value.?, 10) catch {
+            core.width = std.fmt.parseInt(u32, opt.arg.?.value.?, 10) catch {
                 return result.ErrorWrap.create(ExecError.ParseErrorWidth, "{s}", .{opt.arg.?.value.?});
             };
         } else if (std.mem.eql(u8, opt.long_name, "scale")) {
             core.scale = std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {
                 return result.ErrorWrap.create(ExecError.ParseErrorScale, "{s}", .{opt.arg.?.value.?});
             };
-            height.* = @intFromFloat(utils.itof(f32, height.*) * core.scale);
-            width.* = @intFromFloat(utils.itof(f32, width.*) * core.scale);
         } else if (std.mem.eql(u8, opt.long_name, "fit")) {
-            const term_size = try term.get_term_size();
-            core.scale = corelib.get_scale(
-                @intCast(width.*),
-                @intCast(height.*),
-                term_size.width,
-                term_size.height,
-            );
-            height.* = @intFromFloat(utils.itof(f32, height.*) * core.scale);
-            width.* = @intFromFloat(utils.itof(f32, width.*) * core.scale);
+            core.fit_screen = true;
         } else if (std.mem.eql(u8, opt.long_name, "brightness")) {
             core.brightness = std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {
                 return result.ErrorWrap.create(ExecError.ParseErrorBrightness, "{s}", .{opt.arg.?.value.?});

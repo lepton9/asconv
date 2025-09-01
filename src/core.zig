@@ -1,5 +1,6 @@
 const std = @import("std");
 pub const time = @import("time.zig");
+const term = @import("term.zig");
 const utils = @import("utils");
 const itof = utils.itof;
 const ftoi = utils.ftoi;
@@ -120,7 +121,10 @@ pub const Core = struct {
     ascii_info: *AsciiInfo,
     edge_chars: []const u8,
     brightness: f32,
+    fit_screen: bool = false,
     scale: f32,
+    height: ?usize = null,
+    width: ?usize = null,
     color: bool,
     color_mode: ColorMode,
     edge_detection: bool,
@@ -173,6 +177,22 @@ pub const Core = struct {
 
     pub fn toggle_color(self: *Core) void {
         self.color = !self.color;
+    }
+
+    pub fn apply_scale(core: *Core, width: *usize, height: *usize) !void {
+        const w: usize = core.width orelse width.*;
+        const h: usize = core.height orelse height.*;
+        if (core.fit_screen) {
+            const term_size = try term.get_term_size();
+            core.scale = get_scale(
+                @intCast(w),
+                @intCast(h),
+                term_size.width,
+                term_size.height,
+            );
+        }
+        height.* = @intFromFloat(utils.itof(f32, h) * core.scale);
+        width.* = @intFromFloat(utils.itof(f32, w) * core.scale);
     }
 
     pub fn pixel_to_char(core: *Core, pixel: u32) []const u8 {
