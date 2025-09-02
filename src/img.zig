@@ -60,12 +60,11 @@ pub const Image = struct {
     }
 
     pub fn set_edge_detection(self: *Image) !void {
+        if (self.edges) |edges| {
+            edges.deinit(self.allocator);
+        }
         self.core.edge_detection = true;
         self.edges = try corelib.EdgeData.init(self.allocator, self.height, self.width);
-    }
-
-    pub fn set_ascii_info(self: *Image, charset: []const u8) !void {
-        try self.core.set_ascii_info(self.allocator, charset);
     }
 
     pub fn fit_image(self: *Image) !void {

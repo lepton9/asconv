@@ -10,27 +10,57 @@ pub const OutputMode = enum {
 pub const Video = struct {
     core: *corelib.Core = undefined,
     mode: OutputMode = .Realtime,
-    output_path: ?[]const u8,
+    output_path: ?[]const u8 = null,
     fps: f64,
     frame_ns: u64,
     width: usize,
     height: usize,
     frame: []u32,
+    edges: ?corelib.EdgeData = null,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, height: usize, width: usize) !*Video {
-        var video = try allocator.create(Video);
-        video.allocator = allocator;
-        video.height = height;
-        video.width = width;
-        video.frame = try allocator.alloc(u32, height * width);
+        const video = try allocator.create(Video);
+        video.* = .{
+            .allocator = allocator,
+            .fps = 30,
+            .frame_ns = 0,
+            .height = height,
+            .width = width,
+            .frame = try allocator.alloc(u32, height * width),
+        };
         @memset(video.frame, 0);
         return video;
     }
 
     pub fn deinit(self: *Video) void {
+        if (self.edges) |edges| {
+            edges.deinit(self.allocator);
+        }
         self.allocator.free(self.frame);
         self.allocator.destroy(self);
+    }
+
+    pub fn set_edge_detection(self: *Video) !void {
+        if (self.edges) |edges| {
+            edges.deinit(self.allocator);
+        }
+        self.edges = null;
+        if (!self.core.edge_detection) return;
+        self.edges = try corelib.EdgeData.init(
+            self.allocator,
+            @intCast(self.height),
+            @intCast(self.width),
+        );
+    }
+
+    fn get_char(self: *Video, x: usize, y: usize) []const u8 {
+        if (self.core.edge_detection) {
+            if (corelib.edge_char(self.edges.?, y * self.width + x, self.core.edge_chars)) |c| {
+                return c;
+            }
+        }
+        return self.core.pixel_to_char(self.frame[y * self.width + x]);
     }
 
     fn pixel_to_ascii(
@@ -39,9 +69,14 @@ pub const Video = struct {
         x: usize,
         y: usize,
     ) !void {
-        const c: []const u8 = self.core.pixel_to_char(self.frame[y * self.width + x]);
-        try buffer.appendSlice(c);
-        try buffer.appendSlice(c);
+        const c: []const u8 = self.get_char(x, y);
+        if (self.core.color) switch (self.core.color_mode) {
+            .color256 => try corelib.append_256_color(buffer, c, self.frame[y * self.width + x]),
+            .truecolor => try corelib.append_truecolor(buffer, c, self.frame[y * self.width + x]),
+        } else {
+            try buffer.appendSlice(c);
+            try buffer.appendSlice(c);
+        }
     }
 
     pub fn frame_to_ascii(self: *Video) ![]const u8 {
@@ -120,6 +155,7 @@ pub fn process_video(
     video.output_path = output;
     video.mode = if (output) |_| .Dump else .Realtime;
     video.core = core;
+    try video.set_edge_detection();
     defer video.deinit();
 
     const stream = fmt_ctx.*.streams[video_stream_index];
