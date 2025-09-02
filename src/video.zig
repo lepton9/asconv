@@ -180,13 +180,11 @@ pub fn process_video(
 
                     try compress_frame(frame_rgba, rgba_buf);
 
-                    corelib.scale_nearest(
+                    try process_frame(
+                        video,
                         rgba_buf,
-                        video.frame,
                         @intCast(frame_rgba.width),
                         @intCast(frame_rgba.height),
-                        video.width,
-                        video.height,
                     );
 
                     try video.handle_frame(frame_count);
@@ -198,7 +196,31 @@ pub fn process_video(
     }
 }
 
-pub fn compress_frame(frame: *av.Frame, dst: []u32) !void {
+fn process_frame(video: *Video, frame: []u32, f_width: usize, f_height: usize) !void {
+    corelib.scale_bilinear(
+        frame,
+        video.frame,
+        f_width,
+        f_height,
+        video.width,
+        video.height,
+    );
+
+    if (video.core.edge_detection) {
+        var timer = try corelib.time.Timer.start(&video.core.perf.edge_detect);
+        defer timer.stop();
+        try corelib.calc_edges(
+            video.allocator,
+            video.core.*,
+            video.edges.?,
+            video.frame,
+            video.width,
+            video.height,
+        );
+    }
+}
+
+fn compress_frame(frame: *av.Frame, dst: []u32) !void {
     const width: usize = @intCast(frame.width);
     const height: usize = @intCast(frame.height);
     const row_stride: usize = @as(usize, @intCast(frame.linesize[0])) / @sizeOf(u32);
