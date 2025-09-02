@@ -191,7 +191,7 @@ pub const Core = struct {
         if (core.fit_screen) {
             const term_size = try term.get_term_size();
             core.scale = get_scale(
-                @intCast(w),
+                @intCast(2 * w),
                 @intCast(h),
                 term_size.width,
                 term_size.height,
