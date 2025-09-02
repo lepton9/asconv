@@ -78,7 +78,15 @@ pub fn build(b: *std.Build) void {
     });
     exec_mod.addImport("img", img_mod);
     img_mod.addImport("core", core_mod);
+
+    // Video
+    const video_mod = b.addModule("video", .{
+        .root_source_file = b.path("src/video.zig"),
+        .target = target,
+        .optimize = optimize,
     });
+    exec_mod.addImport("video", video_mod);
+    video_mod.addImport("core", core_mod);
 
     // Result
     const result_mod = b.createModule(.{
@@ -127,6 +135,15 @@ pub fn build(b: *std.Build) void {
     stb_lib.installHeadersDirectory(b.path("lib"), "", .{});
     b.installArtifact(stb_lib);
 
+    // Ffmpeg
+    const av_mod = b.addModule("av", .{
+        .root_source_file = b.path("src/av.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    video_mod.addImport("av", av_mod);
+    linkFfmpeg(b, target, av_mod);
+
     // Toml
     const toml = b.dependency("toml", .{ .target = target, .optimize = optimize });
     const toml_mod = toml.module("toml");
@@ -165,4 +182,23 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_test_cmd.step);
+}
+
+fn linkFfmpeg(b: *std.Build, target: std.Build.ResolvedTarget, lib: *std.Build.Module) void {
+    switch (target.result.os.tag) {
+        .windows => {
+            lib.addLibraryPath(b.path("C:/ffmpeg/lib"));
+            lib.addIncludePath(b.path("C:/ffmpeg/include"));
+            lib.linkSystemLibrary("avformat", .{});
+            lib.linkSystemLibrary("avcodec", .{});
+            lib.linkSystemLibrary("swscale", .{});
+            lib.linkSystemLibrary("avutil", .{ .use_pkg_config = .force });
+        },
+        else => {
+            lib.linkSystemLibrary("libavformat", .{ .use_pkg_config = .force });
+            lib.linkSystemLibrary("libavcodec", .{ .use_pkg_config = .force });
+            lib.linkSystemLibrary("libswscale", .{ .use_pkg_config = .force });
+            lib.linkSystemLibrary("libavutil", .{ .use_pkg_config = .force });
+        },
+    }
 }
