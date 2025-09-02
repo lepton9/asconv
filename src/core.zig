@@ -251,10 +251,10 @@ pub fn scale_bilinear(
             const x1: usize = @min(src_width - 1, x0 + 1);
             const wx: f64 = fx - itof(f64, x0);
 
-            const p00 = unpack_rgba(src[y0][x0]);
-            const p10 = unpack_rgba(src[y0][x1]);
-            const p01 = unpack_rgba(src[y1][x0]);
-            const p11 = unpack_rgba(src[y1][x1]);
+            const p00 = unpack_rgba(src[y0 * src_width + x0]);
+            const p10 = unpack_rgba(src[y0 * src_width + x1]);
+            const p01 = unpack_rgba(src[y1 * src_width + x0]);
+            const p11 = unpack_rgba(src[y1 * src_width + x1]);
 
             var result: [4]u8 = undefined;
 
