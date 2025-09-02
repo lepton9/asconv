@@ -4,13 +4,15 @@ const cmd = cli.cmd;
 const result = @import("result");
 const corelib = @import("core");
 const image = @import("img");
-const video = @import("video");
 const utils = @import("utils");
 const usage = @import("usage");
 const config = @import("config");
 const time = corelib.time;
 const Image = image.Image;
 const ImageRaw = image.ImageRaw;
+
+pub const build_options = @import("build_options");
+const enable_video = build_options.video;
 
 pub const commands = usage.commands;
 pub const options = usage.options;
@@ -35,6 +37,7 @@ pub const ExecError = error{
     NoConfigCharset,
     FetchError,
     InvalidUrl,
+    VideoBuildOptionNotSet,
 };
 
 fn input_file(cli_: *cli.Cli) ![]const u8 {
@@ -164,12 +167,19 @@ fn ascii_video(
     cli_: *cli.Cli,
     core: *corelib.Core,
     filename: []const u8,
-) !void {
-    if (try ascii_opts(allocator, cli_, core)) |_| {
-        return;
+) !?result.ErrorWrap {
+    if (!enable_video) return result.ErrorWrap.create(
+        ExecError.VideoBuildOptionNotSet,
+        "{s}",
+        .{"video"},
+    );
+
+    if (try ascii_opts(allocator, cli_, core)) |err| {
+        return err;
     }
     const output = output_path(cli_);
-    try video.process_video(allocator, core, filename, output);
+    try @import("video").process_video(allocator, core, filename, output);
+    return null;
 }
 
 fn ascii_image(
@@ -223,7 +233,9 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli, file_type: corelib.MediaT
     };
     try core.set_ascii_info(allocator, usage.characters);
     switch (file_type) {
-        .Video => try ascii_video(allocator, cli_, core, filename),
+        .Video => {
+            if (try ascii_video(allocator, cli_, core, filename)) |err| return err;
+        },
         else => {
             if (try ascii_image(allocator, cli_, core, filename)) |err| return err;
         },
@@ -255,6 +267,7 @@ fn ascii_opts(
         } else break :blk try config.get_config(allocator);
     };
     defer if (conf) |c| c.deinit(allocator);
+    if (cli_.args == null) return null;
 
     for (cli_.args.?.items) |*opt| {
         if (std.mem.eql(u8, opt.long_name, "height")) {

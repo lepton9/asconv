@@ -10,6 +10,14 @@ pub fn build(b: *std.Build) void {
     const linkage = b.option(std.builtin.LinkMode, "linkage", "Static or dynamic linkage") orelse .static;
     const CFlags = &[_][]const u8{"-fPIC"};
 
+    const enable_video = b.option(
+        bool,
+        "video",
+        "Enables video support and requires Ffmpeg libraries",
+    ) orelse false;
+    const options = b.addOptions();
+    options.addOption(bool, "video", enable_video);
+
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -23,6 +31,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exe_mod.addImport("exec", exec_mod);
+    exec_mod.addOptions("build_options", options);
 
     // Config
     const config_mod = b.createModule(.{

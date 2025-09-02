@@ -97,6 +97,12 @@ fn handle_exec_error(err: result.ErrorWrap) void {
         exec.ExecError.NoConfigCharset => {
             std.log.err("No charset in config with key '{s}'", .{err.get_ctx()});
         },
+        exec.ExecError.VideoBuildOptionNotSet => {
+            std.log.err(
+                "Build option '-D{s}' is not set. Video support disabled",
+                .{err.get_ctx()},
+            );
+        },
         else => {
             std.log.err("Error: '{s}'", .{err.get_ctx()});
         },
