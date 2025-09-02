@@ -223,13 +223,22 @@ fn process_frame(video: *Video, frame: []u32, f_width: usize, f_height: usize) !
 fn compress_frame(frame: *av.Frame, dst: []u32) !void {
     const width: usize = @intCast(frame.width);
     const height: usize = @intCast(frame.height);
-    const row_stride: usize = @as(usize, @intCast(frame.linesize[0])) / @sizeOf(u32);
-    const buf_ptr: [*]u32 = @ptrCast(@alignCast(frame.data[0]));
+    const bpp = 4;
+    const row_stride: usize = @intCast(frame.linesize[0]);
+    const buf_ptr: [*]u8 = @ptrCast(@alignCast(frame.data[0]));
 
     for (0..height) |y| {
-        const src_row = buf_ptr[y * row_stride .. y * row_stride + width];
+        const src_row = buf_ptr[y * row_stride .. y * row_stride + width * bpp];
         const dst_row = dst[y * width .. (y + 1) * width];
-        @memcpy(dst_row, src_row);
+        for (0..width) |x| {
+            const i = x * bpp;
+            dst_row[x] = corelib.pack_rgba(.{
+                src_row[i + 0],
+                src_row[i + 1],
+                src_row[i + 2],
+                src_row[i + 3],
+            });
+        }
     }
 }
 
