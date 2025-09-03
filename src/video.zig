@@ -16,6 +16,7 @@ pub const Video = struct {
     width: usize,
     height: usize,
     frame: []u32,
+    frame_ascii_buffer: std.ArrayList(u8),
     edges: ?corelib.EdgeData = null,
     allocator: std.mem.Allocator,
 
@@ -28,6 +29,7 @@ pub const Video = struct {
             .height = height,
             .width = width,
             .frame = try allocator.alloc(u32, height * width),
+            .frame_ascii_buffer = std.ArrayList(u8).init(allocator),
         };
         @memset(video.frame, 0);
         return video;
@@ -37,6 +39,7 @@ pub const Video = struct {
         if (self.edges) |edges| {
             edges.deinit(self.allocator);
         }
+        self.frame_ascii_buffer.deinit();
         self.allocator.free(self.frame);
         self.allocator.destroy(self);
     }
@@ -80,20 +83,18 @@ pub const Video = struct {
     }
 
     pub fn frame_to_ascii(self: *Video) ![]const u8 {
-        var buffer = std.ArrayList(u8).init(self.allocator);
-        defer buffer.deinit();
+        self.frame_ascii_buffer.clearRetainingCapacity();
         for (0..self.height) |y| {
             for (0..self.width) |x| {
-                try self.pixel_to_ascii(&buffer, x, y);
+                try self.pixel_to_ascii(&self.frame_ascii_buffer, x, y);
             }
-            try buffer.appendSlice("\n");
+            try self.frame_ascii_buffer.append('\n');
         }
-        return buffer.toOwnedSlice();
+        return self.frame_ascii_buffer.items;
     }
 
     fn handle_frame(self: *Video, frame_no: usize) !void {
         const ascii = try self.frame_to_ascii();
-        defer self.allocator.free(ascii);
 
         switch (self.mode) {
             .Realtime => {
