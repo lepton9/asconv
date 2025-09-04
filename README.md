@@ -1,13 +1,15 @@
 # Asconv
 
-CLI tool to convert images to ascii
+CLI tool to convert images or video to ascii
 
 ## Build from source
 Compiled binary in `zig-out/bin/asconv`
 
 ```
-zig build -Doptimize=ReleaseFast
+zig build -Dvideo -Doptimize=ReleaseFast
 ```
+> Omit the `-Dvideo` flag to not require Ffmpeg libraries.
+
 > Omit the `-Doptimize=ReleaseFast` flag for a debug build.
 
 ## Usage
@@ -17,7 +19,8 @@ asconv [command] [options]
 
 ### Commands
 ```
-ascii                                    Convert to ascii
+ascii                                    Convert image to ascii
+asciivid                                 Convert video to ascii
 size                                     Show size of the image
 help                                     Print help
 ```

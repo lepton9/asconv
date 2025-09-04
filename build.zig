@@ -7,7 +7,6 @@ pub fn build(b: *std.Build) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
-    const linkage = b.option(std.builtin.LinkMode, "linkage", "Static or dynamic linkage") orelse .static;
     const CFlags = &[_][]const u8{"-fPIC"};
 
     const enable_video = b.option(
@@ -58,12 +57,6 @@ pub fn build(b: *std.Build) void {
     exe_mod.addImport("cli", cli_mod);
     exec_mod.addImport("cli", cli_mod);
     usage_mod.addImport("cli", cli_mod);
-    const cli_lib = b.addLibrary(.{
-        .linkage = .static,
-        .name = "cli",
-        .root_module = cli_mod,
-    });
-    b.installArtifact(cli_lib);
 
     // Core
     const core_mod = b.addModule("core", .{
@@ -72,12 +65,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exec_mod.addImport("core", core_mod);
-    const core_lib = b.addLibrary(.{
-        .linkage = .static,
-        .name = "core",
-        .root_module = core_mod,
-    });
-    b.installArtifact(core_lib);
 
     // Image
     const img_mod = b.createModule(.{
@@ -106,12 +93,6 @@ pub fn build(b: *std.Build) void {
     cli_mod.addImport("result", result_mod);
     exe_mod.addImport("result", result_mod);
     exec_mod.addImport("result", result_mod);
-    const result_lib = b.addLibrary(.{
-        .linkage = .static,
-        .name = "result",
-        .root_module = result_mod,
-    });
-    b.installArtifact(result_lib);
 
     // Utils
     const utils_mod = b.createModule(.{
@@ -136,13 +117,6 @@ pub fn build(b: *std.Build) void {
     stb_mod.addIncludePath(b.path("lib"));
     stb_mod.addCSourceFile(.{ .file = b.path("lib/stb.c"), .flags = CFlags });
     img_mod.addImport("stb", stb_mod);
-    const stb_lib = b.addLibrary(.{
-        .name = "stb",
-        .root_module = stb_mod,
-        .linkage = linkage,
-    });
-    stb_lib.installHeadersDirectory(b.path("lib"), "", .{});
-    b.installArtifact(stb_lib);
 
     // Ffmpeg
     const av_mod = b.addModule("av", .{
