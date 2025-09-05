@@ -106,6 +106,21 @@ pub const Video = struct {
             },
         }
     }
+
+    fn process_frame(video: *Video) !void {
+        if (video.core.edge_detection) {
+            var timer = try corelib.time.Timer.start(&video.core.perf.edge_detect);
+            defer timer.stop();
+            try corelib.calc_edges(
+                video.allocator,
+                video.core.*,
+                video.edges.?,
+                video.frame,
+                video.width,
+                video.height,
+            );
+        }
+    }
 };
 
 pub fn process_video(
@@ -145,12 +160,6 @@ pub fn process_video(
         null,
     );
 
-    const rgba_buf: []u32 = try allocator.alloc(
-        u32,
-        @intCast(frame_rgba.width * frame_rgba.height),
-    );
-    defer allocator.free(rgba_buf);
-
     var video = try Video.init(allocator, height, width);
     defer video.deinit();
     video.output_path = output;
@@ -178,30 +187,14 @@ pub fn process_video(
                         &frame_rgba.*.linesize,
                     ) < 0) return error.ScaleError;
 
-                    try compress_frame(frame_rgba, rgba_buf);
-                    try process_frame(video, rgba_buf);
+                    try compress_frame(frame_rgba, video.frame);
+                    try video.process_frame();
                     try video.handle_frame(frame_count);
                     frame_count += 1;
                 }
             }
         }
         av.packet_unref(&packet);
-    }
-}
-
-fn process_frame(video: *Video, frame: []u32) !void {
-    @memcpy(video.frame, frame);
-    if (video.core.edge_detection) {
-        var timer = try corelib.time.Timer.start(&video.core.perf.edge_detect);
-        defer timer.stop();
-        try corelib.calc_edges(
-            video.allocator,
-            video.core.*,
-            video.edges.?,
-            video.frame,
-            video.width,
-            video.height,
-        );
     }
 }
 
