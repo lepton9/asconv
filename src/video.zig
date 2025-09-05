@@ -11,6 +11,7 @@ pub const Video = struct {
     core: *corelib.Core = undefined,
     mode: OutputMode = .Realtime,
     output_path: ?[]const u8 = null,
+    writer: std.io.BufferedWriter(4096, std.fs.File.Writer) = undefined,
     fps: f64,
     frame_ns: u64,
     width: usize,
@@ -41,6 +42,19 @@ pub const Video = struct {
         self.frame_ascii_buffer.deinit();
         self.allocator.free(self.frame);
         self.allocator.destroy(self);
+    }
+
+    pub fn set_output(self: *Video, output: ?[]const u8) void {
+        if (output) |out| {
+            self.mode = .Dump;
+            self.output_path = out;
+        } else {
+            self.mode = .Realtime;
+            self.output_path = null;
+            const stdout_file = std.io.getStdOut().writer();
+            const bw = std.io.bufferedWriter(stdout_file);
+            self.writer = bw;
+        }
     }
 
     pub fn set_edge_detection(self: *Video) !void {
@@ -97,9 +111,8 @@ pub const Video = struct {
 
         switch (self.mode) {
             .Realtime => {
-                std.debug.print("{s}\n", .{ascii});
+                try print_frame(&self.writer, ascii);
                 std.time.sleep(self.frame_ns);
-                std.debug.print("\x1b[H", .{});
             },
             .Dump => {
                 try dump_frame(self.allocator, frame_no, ascii, self.output_path.?);
@@ -162,10 +175,10 @@ pub fn process_video(
 
     var video = try Video.init(allocator, height, width);
     defer video.deinit();
-    video.output_path = output;
-    video.mode = if (output) |_| .Dump else .Realtime;
     video.core = core;
+    video.set_output(output);
     try video.set_edge_detection();
+    if (video.mode == .Realtime) try clear_screen(&video.writer);
 
     const stream = fmt_ctx.*.streams[video_stream_index];
     video.fps = @as(f64, @floatFromInt(stream.*.avg_frame_rate.num)) /
@@ -217,6 +230,21 @@ fn compress_frame(frame: *av.Frame, dst: []u32) !void {
             pix.* = @byteSwap(pix.*);
         }
     }
+}
+
+fn clear_screen(bw: *std.io.BufferedWriter(4096, std.fs.File.Writer)) !void {
+    try bw.writer().writeAll("\x1b[2J");
+    try bw.flush();
+}
+
+fn print_frame(
+    bw: *std.io.BufferedWriter(4096, std.fs.File.Writer),
+    ascii: []const u8,
+) !void {
+    const writer = bw.writer();
+    try writer.writeAll("\x1b[H");
+    try writer.writeAll(ascii);
+    try bw.flush();
 }
 
 fn dump_frame(
