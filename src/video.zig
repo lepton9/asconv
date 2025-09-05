@@ -31,7 +31,6 @@ pub const Video = struct {
             .frame = try allocator.alloc(u32, height * width),
             .frame_ascii_buffer = std.ArrayList(u8).init(allocator),
         };
-        @memset(video.frame, 0);
         return video;
     }
 
@@ -120,12 +119,25 @@ pub fn process_video(
     const codec_ctx: *av.CodecCtx = try av.get_decoder(fmt_ctx, video_stream_index);
     var packet: av.Packet = undefined;
 
+    var width: usize = @intCast(codec_ctx.width);
+    var height: usize = @intCast(codec_ctx.height);
+    try core.apply_scale(&width, &height);
+
+    var frame: *av.Frame = av.frame_alloc();
+    defer av.frame_free(&frame);
+    var frame_rgba: *av.Frame = av.frame_alloc();
+    defer av.frame_free(&frame_rgba);
+    frame_rgba.width = @intCast(width);
+    frame_rgba.height = @intCast(height);
+    frame_rgba.format = av.PIX_FMT_RGBA;
+    if (av.frame_get_buffer(frame_rgba, 32) < 0) return error.NoFrameBuffer;
+
     const sws = av.sws_get_context(
         codec_ctx.width,
         codec_ctx.height,
         codec_ctx.pix_fmt,
-        codec_ctx.width,
-        codec_ctx.height,
+        frame_rgba.width,
+        frame_rgba.height,
         av.PIX_FMT_RGBA,
         av.SWS_BILINEAR,
         null,
@@ -133,31 +145,18 @@ pub fn process_video(
         null,
     );
 
-    var frame: *av.Frame = av.frame_alloc();
-    defer av.frame_free(&frame);
-    var frame_rgba: *av.Frame = av.frame_alloc();
-    defer av.frame_free(&frame_rgba);
-    frame_rgba.format = av.PIX_FMT_RGBA;
-    frame_rgba.width = codec_ctx.width;
-    frame_rgba.height = codec_ctx.height;
-    if (av.frame_get_buffer(frame_rgba, 32) < 0) return error.NoFrameBuffer;
-
     const rgba_buf: []u32 = try allocator.alloc(
         u32,
         @intCast(frame_rgba.width * frame_rgba.height),
     );
     defer allocator.free(rgba_buf);
 
-    var width: usize = @intCast(frame_rgba.width);
-    var height: usize = @intCast(frame_rgba.height);
-    try core.apply_scale(&width, &height);
-
     var video = try Video.init(allocator, height, width);
+    defer video.deinit();
     video.output_path = output;
     video.mode = if (output) |_| .Dump else .Realtime;
     video.core = core;
     try video.set_edge_detection();
-    defer video.deinit();
 
     const stream = fmt_ctx.*.streams[video_stream_index];
     video.fps = @as(f64, @floatFromInt(stream.*.avg_frame_rate.num)) /
@@ -169,7 +168,7 @@ pub fn process_video(
         if (packet.stream_index == video_stream_index) {
             if (av.send_packet(codec_ctx, &packet) == 0) {
                 while (av.receive_frame(codec_ctx, frame) == 0) {
-                    _ = av.sws_scale(
+                    if (av.sws_scale(
                         sws,
                         @ptrCast(&frame.*.data),
                         @ptrCast(&frame.*.linesize),
@@ -177,17 +176,10 @@ pub fn process_video(
                         codec_ctx.height,
                         &frame_rgba.*.data,
                         &frame_rgba.*.linesize,
-                    );
+                    ) < 0) return error.ScaleError;
 
                     try compress_frame(frame_rgba, rgba_buf);
-
-                    try process_frame(
-                        video,
-                        rgba_buf,
-                        @intCast(frame_rgba.width),
-                        @intCast(frame_rgba.height),
-                    );
-
+                    try process_frame(video, rgba_buf);
                     try video.handle_frame(frame_count);
                     frame_count += 1;
                 }
@@ -197,16 +189,8 @@ pub fn process_video(
     }
 }
 
-fn process_frame(video: *Video, frame: []u32, f_width: usize, f_height: usize) !void {
-    corelib.scale_bilinear(
-        frame,
-        video.frame,
-        f_width,
-        f_height,
-        video.width,
-        video.height,
-    );
-
+fn process_frame(video: *Video, frame: []u32) !void {
+    @memcpy(video.frame, frame);
     if (video.core.edge_detection) {
         var timer = try corelib.time.Timer.start(&video.core.perf.edge_detect);
         defer timer.stop();
