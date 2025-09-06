@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Time = struct {
+pub const Stats = struct {
     total: u64 = 0,
     scaling: u64 = 0,
     edge_detect: u64 = 0,
@@ -11,8 +11,8 @@ pub const Time = struct {
     frames_n: ?usize = null,
     dropped_frames: ?usize = null,
 
-    pub fn init() Time {
-        return Time{};
+    pub fn init() Stats {
+        return Stats{};
     }
 };
 

@@ -96,7 +96,7 @@ pub const Video = struct {
     }
 
     pub fn frame_to_ascii(self: *Video) ![]const u8 {
-        var timer = try corelib.time.Timer.start_add(&self.core.perf.converting);
+        var timer = try corelib.time.Timer.start_add(&self.core.stats.converting);
         defer timer.stop();
         self.frame_ascii_buffer.clearRetainingCapacity();
         for (0..self.height) |y| {
@@ -122,7 +122,7 @@ pub const Video = struct {
 
     fn process_frame(video: *Video) !void {
         if (video.core.edge_detection) {
-            var timer = try corelib.time.Timer.start_add(&video.core.perf.edge_detect);
+            var timer = try corelib.time.Timer.start_add(&video.core.stats.edge_detect);
             defer timer.stop();
             try corelib.calc_edges(
                 video.allocator,
@@ -142,7 +142,7 @@ pub fn process_video(
     path: []const u8,
     output: ?[]const u8,
 ) !void {
-    var timer_read = try corelib.time.Timer.start(&core.perf.read);
+    var timer_read = try corelib.time.Timer.start(&core.stats.read);
     const fmt_ctx: *av.FormatCtx = try av.open_video_file(path);
     const video_stream_index: usize = try av.get_stream_ind(fmt_ctx);
     const codec_ctx: *av.CodecCtx = try av.get_decoder(fmt_ctx, video_stream_index);
@@ -187,11 +187,11 @@ pub fn process_video(
         @as(f64, @floatFromInt(stream.*.avg_frame_rate.den));
     video.fps = target_fps;
     video.frame_ns = @intFromFloat(std.time.ns_per_s / video.fps);
-    core.perf.fps = 0;
-    core.perf.frames_n = 0;
-    core.perf.dropped_frames = 0;
+    core.stats.fps = 0;
+    core.stats.frames_n = 0;
+    core.stats.dropped_frames = 0;
 
-    var timer_fps = try corelib.time.Timer.start_add(&core.perf.fps.?);
+    var timer_fps = try corelib.time.Timer.start_add(&core.stats.fps.?);
 
     while (av.read_frame(fmt_ctx, &packet) >= 0) {
         if (packet.stream_index == video_stream_index) {
@@ -200,17 +200,17 @@ pub fn process_video(
             if (av.send_packet(codec_ctx, &packet) != 0) continue;
             while (av.receive_frame(codec_ctx, frame) == 0) {
                 if (video.mode == .Realtime and core.drop_frames) {
-                    const target_time = core.perf.frames_n.? * video.frame_ns;
+                    const target_time = core.stats.frames_n.? * video.frame_ns;
                     const elapsed = timer_fps.timer.read();
                     if (elapsed > target_time + video.frame_ns) {
                         // More than 1 frame late
-                        core.perf.frames_n.? += 1;
-                        core.perf.dropped_frames.? += 1;
+                        core.stats.frames_n.? += 1;
+                        core.stats.dropped_frames.? += 1;
                         continue;
                     }
                 }
 
-                var timer_scale = try corelib.time.Timer.start_add(&video.core.perf.scaling);
+                var timer_scale = try corelib.time.Timer.start_add(&video.core.stats.scaling);
                 if (av.sws_scale(
                     sws,
                     @ptrCast(&frame.*.data),
@@ -224,13 +224,13 @@ pub fn process_video(
                 timer_scale.stop();
 
                 try video.process_frame();
-                try video.handle_frame(core.perf.frames_n.?);
+                try video.handle_frame(core.stats.frames_n.?);
 
-                core.perf.frames_n.? += 1;
+                core.stats.frames_n.? += 1;
                 if (video.mode == .Dump) continue;
 
                 // Target time for the next frame
-                const next_target_time = (core.perf.frames_n.?) * video.frame_ns;
+                const next_target_time = (core.stats.frames_n.?) * video.frame_ns;
                 const now = timer_fps.timer.read();
                 if (now < next_target_time) {
                     std.time.sleep(next_target_time - now);

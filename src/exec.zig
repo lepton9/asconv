@@ -188,7 +188,7 @@ fn ascii_image(
     core: *corelib.Core,
     filename: []const u8,
 ) !?result.ErrorWrap {
-    var timer_read = try time.Timer.start(&core.perf.read);
+    var timer_read = try time.Timer.start(&core.stats.read);
     const img_result = get_input_image(allocator, filename);
     timer_read.stop();
     var raw_image = img_result.unwrap_try() catch {
@@ -214,7 +214,7 @@ fn ascii_image(
     const data = try img.to_ascii();
     defer allocator.free(data);
     const file = output_path(cli_);
-    var timer_print = try time.Timer.start(&core.perf.write);
+    var timer_print = try time.Timer.start(&core.stats.write);
     if (file) |path| {
         try write_to_file(path, data);
     } else {
@@ -227,7 +227,7 @@ fn ascii_image(
 fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli, file_type: corelib.MediaType) !?result.ErrorWrap {
     var core = try corelib.Core.init(allocator);
     defer core.deinit(allocator);
-    var timer_total = try time.Timer.start(&core.perf.total);
+    var timer_total = try time.Timer.start(&core.stats.total);
     const filename = input_file(cli_) catch |err| {
         return result.ErrorWrap.create(err, "{s}", .{cli_.global_args orelse ""});
     };
@@ -242,7 +242,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli, file_type: corelib.MediaT
     }
     timer_total.stop();
     if (cli_.find_opt("time")) |_| {
-        try show_performance(allocator, core.perf, file_type);
+        try show_performance(allocator, core.stats, file_type);
     }
     return null;
 }
@@ -341,40 +341,40 @@ fn ascii_opts(
 
 fn show_performance(
     allocator: std.mem.Allocator,
-    perf: time.Time,
+    stats: time.Stats,
     file_type: corelib.MediaType,
 ) !void {
     var line_buf: [256]u8 = undefined;
     var buffer = std.ArrayList(u8).init(allocator);
     defer buffer.deinit();
     try buffer.appendSlice(
-        try std.fmt.bufPrint(&line_buf, "Scaling: {d:.3} s\n", .{time.to_s(perf.scaling)}),
+        try std.fmt.bufPrint(&line_buf, "Scaling: {d:.3} s\n", .{time.to_s(stats.scaling)}),
     );
     try buffer.appendSlice(
-        try std.fmt.bufPrint(&line_buf, "Edge detecting: {d:.3} s\n", .{time.to_s(perf.edge_detect)}),
+        try std.fmt.bufPrint(&line_buf, "Edge detecting: {d:.3} s\n", .{time.to_s(stats.edge_detect)}),
     );
     try buffer.appendSlice(
-        try std.fmt.bufPrint(&line_buf, "Converting: {d:.3} s\n", .{time.to_s(perf.converting)}),
+        try std.fmt.bufPrint(&line_buf, "Converting: {d:.3} s\n", .{time.to_s(stats.converting)}),
     );
     try buffer.appendSlice(
-        try std.fmt.bufPrint(&line_buf, "Read: {d:.3} s\n", .{time.to_s(perf.read)}),
+        try std.fmt.bufPrint(&line_buf, "Read: {d:.3} s\n", .{time.to_s(stats.read)}),
     );
     try buffer.appendSlice(
-        try std.fmt.bufPrint(&line_buf, "Write: {d:.3} s\n", .{time.to_s(perf.write)}),
+        try std.fmt.bufPrint(&line_buf, "Write: {d:.3} s\n", .{time.to_s(stats.write)}),
     );
     if (file_type == .Video) {
         try buffer.appendSlice(try std.fmt.bufPrint(&line_buf, "Fps: {d:.1}\n", .{
-            @as(f64, @floatFromInt(perf.frames_n.?)) / time.to_s(perf.fps.?),
+            @as(f64, @floatFromInt(stats.frames_n.?)) / time.to_s(stats.fps.?),
         }));
         try buffer.appendSlice(try std.fmt.bufPrint(&line_buf, "Frames: {d}\n", .{
-            perf.frames_n.?,
+            stats.frames_n.?,
         }));
         try buffer.appendSlice(try std.fmt.bufPrint(&line_buf, "Dropped frames: {d}\n", .{
-            perf.dropped_frames.?,
+            stats.dropped_frames.?,
         }));
     }
     try buffer.appendSlice(
-        try std.fmt.bufPrint(&line_buf, "Total: {d:.3} s\n", .{time.to_s(perf.total)}),
+        try std.fmt.bufPrint(&line_buf, "Total: {d:.3} s\n", .{time.to_s(stats.total)}),
     );
     try write_to_stdio(buffer.items);
 }

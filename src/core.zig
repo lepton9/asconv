@@ -137,7 +137,7 @@ pub const Core = struct {
     edge_alg: EdgeDetectionAlg,
     sigma1: f32,
     sigma2: f32,
-    perf: time.Time,
+    stats: time.Stats,
     drop_frames: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) !*Core {
@@ -153,7 +153,7 @@ pub const Core = struct {
             .sigma1 = base_gaussian_sigma,
             .sigma2 = base_gaussian_sigma / 1.6,
             .ascii_info = try AsciiInfo.init(allocator, base_char_table),
-            .perf = time.Time.init(),
+            .stats = time.Stats.init(),
         };
         return core;
     }
