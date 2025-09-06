@@ -187,15 +187,27 @@ pub fn process_video(
         @as(f64, @floatFromInt(stream.*.avg_frame_rate.den));
     video.fps = target_fps;
     video.frame_ns = @intFromFloat(std.time.ns_per_s / video.fps);
-
     core.perf.fps = 0;
+    core.perf.frames_n = 0;
+    core.perf.dropped_frames = 0;
+
     var timer_fps = try corelib.time.Timer.start_add(&core.perf.fps.?);
 
-    core.perf.frames_n = 0;
     while (av.read_frame(fmt_ctx, &packet) >= 0) {
         if (packet.stream_index == video_stream_index) {
+            defer av.packet_unref(&packet);
+
             if (av.send_packet(codec_ctx, &packet) == 0) {
                 while (av.receive_frame(codec_ctx, frame) == 0) {
+                    const target_time = core.perf.frames_n.? * video.frame_ns;
+                    const elapsed = timer_fps.timer.read();
+                    if (elapsed > target_time + video.frame_ns) {
+                        // More than 1 frame late
+                        core.perf.frames_n.? += 1;
+                        core.perf.dropped_frames.? += 1;
+                        continue;
+                    }
+
                     var timer_scale = try corelib.time.Timer.start_add(&video.core.perf.scaling);
                     if (av.sws_scale(
                         sws,
@@ -211,19 +223,19 @@ pub fn process_video(
 
                     try video.process_frame();
                     try video.handle_frame(core.perf.frames_n.?);
+
                     core.perf.frames_n.? += 1;
                     if (video.mode == .Dump) continue;
 
                     // Target time for the next frame
-                    const target_time = (core.perf.frames_n.?) * video.frame_ns;
-                    const elapsed = timer_fps.timer.read();
-                    if (elapsed < target_time) {
-                        std.time.sleep(target_time - elapsed);
+                    const next_target_time = (core.perf.frames_n.?) * video.frame_ns;
+                    const now = timer_fps.timer.read();
+                    if (now < next_target_time) {
+                        std.time.sleep(next_target_time - now);
                     }
                 }
             }
         }
-        av.packet_unref(&packet);
     }
     timer_fps.stop();
 }

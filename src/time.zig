@@ -9,6 +9,7 @@ pub const Time = struct {
     write: u64 = 0,
     fps: ?u64 = null,
     frames_n: ?usize = null,
+    dropped_frames: ?usize = null,
 
     pub fn init() Time {
         return Time{};

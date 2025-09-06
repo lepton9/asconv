@@ -367,6 +367,9 @@ fn show_performance(
         try buffer.appendSlice(try std.fmt.bufPrint(&line_buf, "Frames: {d}\n", .{
             perf.frames_n.?,
         }));
+        try buffer.appendSlice(try std.fmt.bufPrint(&line_buf, "Dropped frames: {d}\n", .{
+            perf.dropped_frames.?,
+        }));
     }
     try buffer.appendSlice(
         try std.fmt.bufPrint(&line_buf, "Total: {d:.3} s\n", .{time.to_s(perf.total)}),
