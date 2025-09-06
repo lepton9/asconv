@@ -197,8 +197,9 @@ pub fn process_video(
         if (packet.stream_index == video_stream_index) {
             defer av.packet_unref(&packet);
 
-            if (av.send_packet(codec_ctx, &packet) == 0) {
-                while (av.receive_frame(codec_ctx, frame) == 0) {
+            if (av.send_packet(codec_ctx, &packet) != 0) continue;
+            while (av.receive_frame(codec_ctx, frame) == 0) {
+                if (video.mode == .Realtime and core.drop_frames) {
                     const target_time = core.perf.frames_n.? * video.frame_ns;
                     const elapsed = timer_fps.timer.read();
                     if (elapsed > target_time + video.frame_ns) {
@@ -207,32 +208,32 @@ pub fn process_video(
                         core.perf.dropped_frames.? += 1;
                         continue;
                     }
+                }
 
-                    var timer_scale = try corelib.time.Timer.start_add(&video.core.perf.scaling);
-                    if (av.sws_scale(
-                        sws,
-                        @ptrCast(&frame.*.data),
-                        @ptrCast(&frame.*.linesize),
-                        0,
-                        codec_ctx.height,
-                        &frame_rgba.*.data,
-                        &frame_rgba.*.linesize,
-                    ) < 0) return error.ScaleError;
-                    try compress_frame(frame_rgba, video.frame);
-                    timer_scale.stop();
+                var timer_scale = try corelib.time.Timer.start_add(&video.core.perf.scaling);
+                if (av.sws_scale(
+                    sws,
+                    @ptrCast(&frame.*.data),
+                    @ptrCast(&frame.*.linesize),
+                    0,
+                    codec_ctx.height,
+                    &frame_rgba.*.data,
+                    &frame_rgba.*.linesize,
+                ) < 0) return error.ScaleError;
+                try compress_frame(frame_rgba, video.frame);
+                timer_scale.stop();
 
-                    try video.process_frame();
-                    try video.handle_frame(core.perf.frames_n.?);
+                try video.process_frame();
+                try video.handle_frame(core.perf.frames_n.?);
 
-                    core.perf.frames_n.? += 1;
-                    if (video.mode == .Dump) continue;
+                core.perf.frames_n.? += 1;
+                if (video.mode == .Dump) continue;
 
-                    // Target time for the next frame
-                    const next_target_time = (core.perf.frames_n.?) * video.frame_ns;
-                    const now = timer_fps.timer.read();
-                    if (now < next_target_time) {
-                        std.time.sleep(next_target_time - now);
-                    }
+                // Target time for the next frame
+                const next_target_time = (core.perf.frames_n.?) * video.frame_ns;
+                const now = timer_fps.timer.read();
+                if (now < next_target_time) {
+                    std.time.sleep(next_target_time - now);
                 }
             }
         }

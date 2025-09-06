@@ -138,4 +138,11 @@ pub const options = [_]Option{
         .required = false,
         .arg = .{ .name = "key" },
     },
+    .{
+        .long_name = "dropframes",
+        .short_name = "d",
+        .desc = "Enable frame dropping to maintain target FPS",
+        .required = false,
+        .arg = null,
+    },
 };

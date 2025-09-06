@@ -332,6 +332,8 @@ fn ascii_opts(
                     .{config_path orelse "default_path"},
                 );
             }
+        } else if (std.mem.eql(u8, opt.long_name, "dropframes")) {
+            core.drop_frames = true;
         }
     }
     return null;
