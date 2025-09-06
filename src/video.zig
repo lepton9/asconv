@@ -113,7 +113,6 @@ pub const Video = struct {
         switch (self.mode) {
             .Realtime => {
                 try print_frame(&self.writer, ascii);
-                std.time.sleep(self.frame_ns);
             },
             .Dump => {
                 try dump_frame(self.allocator, frame_no, ascii, self.output_path.?);
@@ -184,9 +183,10 @@ pub fn process_video(
     if (video.mode == .Realtime) try clear_screen(&video.writer);
 
     const stream = fmt_ctx.*.streams[video_stream_index];
-    video.fps = @as(f64, @floatFromInt(stream.*.avg_frame_rate.num)) /
+    const target_fps = @as(f64, @floatFromInt(stream.*.avg_frame_rate.num)) /
         @as(f64, @floatFromInt(stream.*.avg_frame_rate.den));
-    video.frame_ns = @intFromFloat(1_000_000_000 / video.fps);
+    video.fps = target_fps;
+    video.frame_ns = @intFromFloat(std.time.ns_per_s / video.fps);
 
     core.perf.fps = 0;
     var timer_fps = try corelib.time.Timer.start_add(&core.perf.fps.?);
@@ -212,6 +212,14 @@ pub fn process_video(
                     try video.process_frame();
                     try video.handle_frame(core.perf.frames_n.?);
                     core.perf.frames_n.? += 1;
+                    if (video.mode == .Dump) continue;
+
+                    // Target time for the next frame
+                    const target_time = (core.perf.frames_n.?) * video.frame_ns;
+                    const elapsed = timer_fps.timer.read();
+                    if (elapsed < target_time) {
+                        std.time.sleep(target_time - elapsed);
+                    }
                 }
             }
         }
