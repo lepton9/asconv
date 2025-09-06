@@ -347,6 +347,8 @@ fn show_performance(
     var line_buf: [256]u8 = undefined;
     var buffer = std.ArrayList(u8).init(allocator);
     defer buffer.deinit();
+    try buffer.append('\n');
+
     try buffer.appendSlice(
         try std.fmt.bufPrint(&line_buf, "Scaling: {d:.3} s\n", .{time.to_s(stats.scaling)}),
     );

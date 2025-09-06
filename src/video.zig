@@ -70,6 +70,14 @@ pub const Video = struct {
         );
     }
 
+    pub fn set_target_fps(self: *Video, fps: f64) void {
+        self.fps = fps;
+        self.frame_ns = @intFromFloat(std.time.ns_per_s / fps);
+        self.core.stats.fps = 0;
+        self.core.stats.frames_n = 0;
+        self.core.stats.dropped_frames = 0;
+    }
+
     fn get_char(self: *Video, x: usize, y: usize) []const u8 {
         if (self.core.edge_detection) {
             if (corelib.edge_char(self.edges.?, y * self.width + x, self.core.edge_chars)) |c| {
@@ -103,7 +111,7 @@ pub const Video = struct {
             for (0..self.width) |x| {
                 try self.pixel_to_ascii(&self.frame_ascii_buffer, x, y);
             }
-            try self.frame_ascii_buffer.append('\n');
+            if (y < self.height - 1) try self.frame_ascii_buffer.append('\n');
         }
         return self.frame_ascii_buffer.items;
     }
@@ -185,11 +193,7 @@ pub fn process_video(
     const stream = fmt_ctx.*.streams[video_stream_index];
     const target_fps = @as(f64, @floatFromInt(stream.*.avg_frame_rate.num)) /
         @as(f64, @floatFromInt(stream.*.avg_frame_rate.den));
-    video.fps = target_fps;
-    video.frame_ns = @intFromFloat(std.time.ns_per_s / video.fps);
-    core.stats.fps = 0;
-    core.stats.frames_n = 0;
-    core.stats.dropped_frames = 0;
+    video.set_target_fps(target_fps);
 
     var timer_fps = try corelib.time.Timer.start_add(&core.stats.fps.?);
 
