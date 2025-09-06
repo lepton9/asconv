@@ -45,12 +45,11 @@ pub const Video = struct {
     }
 
     pub fn set_output(self: *Video, output: ?[]const u8) void {
-        if (output) |out| {
+        self.output_path = output;
+        if (output) |_| {
             self.mode = .Dump;
-            self.output_path = out;
         } else {
             self.mode = .Realtime;
-            self.output_path = null;
             const stdout_file = std.io.getStdOut().writer();
             const bw = std.io.bufferedWriter(stdout_file);
             self.writer = bw;
@@ -186,7 +185,13 @@ pub fn process_video(
     video.core = core;
     video.set_output(output);
     try video.set_edge_detection();
-    if (video.mode == .Realtime) try clear_screen(&video.writer);
+    if (video.mode == .Realtime) {
+        clear_screen(&video.writer);
+        cursor_hide(&video.writer);
+    }
+    defer {
+        if (video.mode == .Realtime) cursor_show(&video.writer);
+    }
 
     const stream = fmt_ctx.*.streams[video_stream_index];
     const target_fps = @as(f64, @floatFromInt(stream.*.avg_frame_rate.num)) /
@@ -267,9 +272,19 @@ fn compress_frame(frame: *av.Frame, dst: []u32) !void {
     }
 }
 
-fn clear_screen(bw: *std.io.BufferedWriter(4096, std.fs.File.Writer)) !void {
-    try bw.writer().writeAll("\x1b[2J");
-    try bw.flush();
+fn clear_screen(bw: *std.io.BufferedWriter(4096, std.fs.File.Writer)) void {
+    bw.writer().writeAll("\x1b[2J") catch {};
+    bw.flush() catch {};
+}
+
+fn cursor_hide(bw: *std.io.BufferedWriter(4096, std.fs.File.Writer)) void {
+    bw.writer().writeAll("\x1b[?25l") catch {};
+    bw.flush() catch {};
+}
+
+fn cursor_show(bw: *std.io.BufferedWriter(4096, std.fs.File.Writer)) void {
+    bw.writer().writeAll("\x1b[?25h") catch {};
+    bw.flush() catch {};
 }
 
 fn print_frame(
