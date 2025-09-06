@@ -150,7 +150,6 @@ pub fn process_video(
     path: []const u8,
     output: ?[]const u8,
 ) !void {
-    var timer_read = try corelib.time.Timer.start(&core.stats.read);
     const fmt_ctx: *av.FormatCtx = try av.open_video_file(path);
     const video_stream_index: usize = try av.get_stream_ind(fmt_ctx);
     const codec_ctx: *av.CodecCtx = try av.get_decoder(fmt_ctx, video_stream_index);
@@ -181,7 +180,6 @@ pub fn process_video(
         null,
         null,
     );
-    timer_read.stop();
 
     var video = try Video.init(allocator, height, width);
     defer video.deinit();
@@ -195,6 +193,7 @@ pub fn process_video(
         @as(f64, @floatFromInt(stream.*.avg_frame_rate.den));
     video.set_target_fps(target_fps);
 
+    var timer_read = try corelib.time.Timer.start(&core.stats.read);
     var timer_fps = try corelib.time.Timer.start_add(&core.stats.fps.?);
 
     while (av.read_frame(fmt_ctx, &packet) >= 0) {
@@ -203,6 +202,8 @@ pub fn process_video(
 
             if (av.send_packet(codec_ctx, &packet) != 0) continue;
             while (av.receive_frame(codec_ctx, frame) == 0) {
+                timer_read.stop();
+                defer timer_read.reset();
                 if (video.mode == .Realtime and core.drop_frames) {
                     const target_time = core.stats.frames_n.? * video.frame_ns;
                     const elapsed = timer_fps.timer.read();

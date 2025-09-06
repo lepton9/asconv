@@ -22,10 +22,7 @@ pub const Timer = struct {
 
     pub fn start(value: *u64) !Timer {
         value.* = 0;
-        return .{
-            .value = value,
-            .timer = try std.time.Timer.start(),
-        };
+        return start_add(value);
     }
 
     pub fn start_add(value: *u64) !Timer {
@@ -35,9 +32,12 @@ pub const Timer = struct {
         };
     }
 
-    pub fn stop(self: Timer) void {
-        var timer = self.timer;
-        self.value.* += timer.read();
+    pub fn stop(self: *Timer) void {
+        self.value.* += self.timer.read();
+    }
+
+    pub fn reset(self: *Timer) void {
+        self.timer.reset();
     }
 };
 
