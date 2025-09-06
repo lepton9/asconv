@@ -96,6 +96,8 @@ pub const Video = struct {
     }
 
     pub fn frame_to_ascii(self: *Video) ![]const u8 {
+        var timer = try corelib.time.Timer.start_add(&self.core.perf.converting);
+        defer timer.stop();
         self.frame_ascii_buffer.clearRetainingCapacity();
         for (0..self.height) |y| {
             for (0..self.width) |x| {
@@ -108,7 +110,6 @@ pub const Video = struct {
 
     fn handle_frame(self: *Video, frame_no: usize) !void {
         const ascii = try self.frame_to_ascii();
-
         switch (self.mode) {
             .Realtime => {
                 try print_frame(&self.writer, ascii);
@@ -122,7 +123,7 @@ pub const Video = struct {
 
     fn process_frame(video: *Video) !void {
         if (video.core.edge_detection) {
-            var timer = try corelib.time.Timer.start(&video.core.perf.edge_detect);
+            var timer = try corelib.time.Timer.start_add(&video.core.perf.edge_detect);
             defer timer.stop();
             try corelib.calc_edges(
                 video.allocator,
@@ -142,6 +143,7 @@ pub fn process_video(
     path: []const u8,
     output: ?[]const u8,
 ) !void {
+    var timer_read = try corelib.time.Timer.start(&core.perf.read);
     const fmt_ctx: *av.FormatCtx = try av.open_video_file(path);
     const video_stream_index: usize = try av.get_stream_ind(fmt_ctx);
     const codec_ctx: *av.CodecCtx = try av.get_decoder(fmt_ctx, video_stream_index);
@@ -172,6 +174,7 @@ pub fn process_video(
         null,
         null,
     );
+    timer_read.stop();
 
     var video = try Video.init(allocator, height, width);
     defer video.deinit();
@@ -185,11 +188,15 @@ pub fn process_video(
         @as(f64, @floatFromInt(stream.*.avg_frame_rate.den));
     video.frame_ns = @intFromFloat(1_000_000_000 / video.fps);
 
-    var frame_count: usize = 0;
+    core.perf.fps = 0;
+    var timer_fps = try corelib.time.Timer.start_add(&core.perf.fps.?);
+
+    core.perf.frames_n = 0;
     while (av.read_frame(fmt_ctx, &packet) >= 0) {
         if (packet.stream_index == video_stream_index) {
             if (av.send_packet(codec_ctx, &packet) == 0) {
                 while (av.receive_frame(codec_ctx, frame) == 0) {
+                    var timer_scale = try corelib.time.Timer.start_add(&video.core.perf.scaling);
                     if (av.sws_scale(
                         sws,
                         @ptrCast(&frame.*.data),
@@ -199,16 +206,18 @@ pub fn process_video(
                         &frame_rgba.*.data,
                         &frame_rgba.*.linesize,
                     ) < 0) return error.ScaleError;
-
                     try compress_frame(frame_rgba, video.frame);
+                    timer_scale.stop();
+
                     try video.process_frame();
-                    try video.handle_frame(frame_count);
-                    frame_count += 1;
+                    try video.handle_frame(core.perf.frames_n.?);
+                    core.perf.frames_n.? += 1;
                 }
             }
         }
         av.packet_unref(&packet);
     }
+    timer_fps.stop();
 }
 
 fn compress_frame(frame: *av.Frame, dst: []u32) !void {

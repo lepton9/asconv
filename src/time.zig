@@ -7,6 +7,8 @@ pub const Time = struct {
     converting: u64 = 0,
     read: u64 = 0,
     write: u64 = 0,
+    fps: ?u64 = null,
+    frames_n: ?usize = null,
 
     pub fn init() Time {
         return Time{};
@@ -25,9 +27,16 @@ pub const Timer = struct {
         };
     }
 
+    pub fn start_add(value: *u64) !Timer {
+        return .{
+            .value = value,
+            .timer = try std.time.Timer.start(),
+        };
+    }
+
     pub fn stop(self: Timer) void {
         var timer = self.timer;
-        self.value.* = timer.read();
+        self.value.* += timer.read();
     }
 };
 

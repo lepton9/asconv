@@ -242,7 +242,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli, file_type: corelib.MediaT
     }
     timer_total.stop();
     if (cli_.find_opt("time")) |_| {
-        try show_performance(allocator, core.perf);
+        try show_performance(allocator, core.perf, file_type);
     }
     return null;
 }
@@ -337,7 +337,11 @@ fn ascii_opts(
     return null;
 }
 
-fn show_performance(allocator: std.mem.Allocator, perf: time.Time) !void {
+fn show_performance(
+    allocator: std.mem.Allocator,
+    perf: time.Time,
+    file_type: corelib.MediaType,
+) !void {
     var line_buf: [256]u8 = undefined;
     var buffer = std.ArrayList(u8).init(allocator);
     defer buffer.deinit();
@@ -356,6 +360,14 @@ fn show_performance(allocator: std.mem.Allocator, perf: time.Time) !void {
     try buffer.appendSlice(
         try std.fmt.bufPrint(&line_buf, "Write: {d:.3} s\n", .{time.to_s(perf.write)}),
     );
+    if (file_type == .Video) {
+        try buffer.appendSlice(try std.fmt.bufPrint(&line_buf, "Fps: {d:.1}\n", .{
+            @as(f64, @floatFromInt(perf.frames_n.?)) / time.to_s(perf.fps.?),
+        }));
+        try buffer.appendSlice(try std.fmt.bufPrint(&line_buf, "Frames: {d}\n", .{
+            perf.frames_n.?,
+        }));
+    }
     try buffer.appendSlice(
         try std.fmt.bufPrint(&line_buf, "Total: {d:.3} s\n", .{time.to_s(perf.total)}),
     );
