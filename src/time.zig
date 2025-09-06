@@ -33,7 +33,11 @@ pub const Timer = struct {
     }
 
     pub fn stop(self: *Timer) void {
-        self.value.* += self.timer.read();
+        self.value.* += self.read();
+    }
+
+    pub fn read(self: *Timer) u64 {
+        return self.timer.read();
     }
 
     pub fn reset(self: *Timer) void {

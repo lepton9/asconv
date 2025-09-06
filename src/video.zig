@@ -194,7 +194,7 @@ pub fn process_video(
     video.set_target_fps(target_fps);
 
     var timer_read = try corelib.time.Timer.start(&core.stats.read);
-    var timer_fps = try corelib.time.Timer.start_add(&core.stats.fps.?);
+    var timer_fps = try corelib.time.Timer.start(&core.stats.fps.?);
 
     while (av.read_frame(fmt_ctx, &packet) >= 0) {
         if (packet.stream_index == video_stream_index) {
@@ -206,7 +206,7 @@ pub fn process_video(
                 defer timer_read.reset();
                 if (video.mode == .Realtime and core.drop_frames) {
                     const target_time = core.stats.frames_n.? * video.frame_ns;
-                    const elapsed = timer_fps.timer.read();
+                    const elapsed = timer_fps.read();
                     if (elapsed > target_time + video.frame_ns) {
                         // More than 1 frame late
                         core.stats.frames_n.? += 1;
@@ -236,7 +236,7 @@ pub fn process_video(
 
                 // Target time for the next frame
                 const next_target_time = (core.stats.frames_n.?) * video.frame_ns;
-                const now = timer_fps.timer.read();
+                const now = timer_fps.read();
                 if (now < next_target_time) {
                     std.time.sleep(next_target_time - now);
                 }
