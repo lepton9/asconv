@@ -153,3 +153,37 @@ pub const options = [_]Option{
         .arg = null,
     },
 };
+
+fn validate_options(comptime opts: []const Option) void {
+    const std = @import("std");
+    inline for (opts, 0..) |opt_i, i| {
+        inline for (opts[(i + 1)..]) |opt_j| {
+            if (std.mem.eql(u8, opt_i.long_name, opt_j.long_name)) {
+                @compileError("Duplicate long option name: " ++ opt_i.long_name);
+            }
+            if (opt_i.short_name) |sn_i| {
+                if (opt_j.short_name) |sn_j| {
+                    if (std.mem.eql(u8, sn_i, sn_j)) {
+                        @compileError("Duplicate short option name: " ++ sn_i);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn validate_commands(comptime cmds: []const Cmd) void {
+    const std = @import("std");
+    inline for (cmds, 0..) |cmd_i, i| {
+        inline for (cmds[(i + 1)..]) |cmd_j| {
+            if (std.mem.eql(u8, cmd_i.name.?, cmd_j.name.?)) {
+                @compileError("Duplicate command name: " ++ cmd_i.name.?);
+            }
+        }
+    }
+}
+
+comptime {
+    validate_options(&options);
+    validate_commands(&commands);
+}
