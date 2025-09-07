@@ -42,6 +42,8 @@ help                                     Print help
 -t, --time                               Show the time taken to convert the image
     --config      <string>               Set custom config path to use
     --ccharset    <key>                  Use custom characters that are saved in the config
+-p, --progress                           Display the progress of converting video to ASCII
+-d, --dropframes                         Enable frame dropping to maintain target FPS
 ```
 > Option arguments prefixed with `?` are optional.
 

@@ -177,8 +177,9 @@ fn ascii_video(
     if (try ascii_opts(allocator, cli_, core)) |err| {
         return err;
     }
+    const progress = (cli_.find_opt("progress") != null);
     const output = output_path(cli_);
-    try @import("video").process_video(allocator, core, filename, output);
+    try @import("video").process_video(allocator, core, filename, output, progress);
     return null;
 }
 

@@ -139,6 +139,13 @@ pub const options = [_]Option{
         .arg = .{ .name = "key" },
     },
     .{
+        .long_name = "progress",
+        .short_name = "p",
+        .desc = "Display the progress of converting video to ASCII",
+        .required = false,
+        .arg = null,
+    },
+    .{
         .long_name = "dropframes",
         .short_name = "d",
         .desc = "Enable frame dropping to maintain target FPS",
