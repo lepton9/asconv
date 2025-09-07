@@ -7,11 +7,101 @@ pub const OutputMode = enum {
     Dump,
 };
 
-pub const Video = struct {
-    core: *corelib.Core = undefined,
+const Render = struct {
+    frame: []const u8 = undefined,
+    width: usize,
+    height: usize,
     mode: OutputMode = .Realtime,
     output_path: ?[]const u8 = null,
     writer: std.io.BufferedWriter(4096, std.fs.File.Writer) = undefined,
+
+    fn init(allocator: std.mem.Allocator, height: usize, width: usize) !*Render {
+        const render = try allocator.create(Render);
+        render.* = .{
+            .width = width,
+            .height = height,
+        };
+        return render;
+    }
+
+    fn deinit(self: *Render, allocator: std.mem.Allocator) void {
+        allocator.destroy(self);
+    }
+
+    pub fn set_output(self: *Render, output: ?[]const u8) void {
+        self.output_path = output;
+        if (output) |_| {
+            self.mode = .Dump;
+        } else {
+            self.mode = .Realtime;
+            const stdout_file = std.io.getStdOut().writer();
+            const bw = std.io.bufferedWriter(stdout_file);
+            self.writer = bw;
+        }
+    }
+
+    fn handle_frame(
+        self: *Render,
+        allocator: std.mem.Allocator,
+        frame: []const u8,
+        frame_no: usize,
+    ) !void {
+        switch (self.mode) {
+            .Realtime => {
+                try self.print_frame(frame);
+            },
+            .Dump => {
+                try self.dump_frame(allocator, frame, frame_no);
+            },
+        }
+    }
+
+    fn print_frame(self: *Render, frame: []const u8) !void {
+        const writer = self.writer.writer();
+        try writer.writeAll("\x1b[H");
+        try writer.writeAll(frame);
+        try self.writer.flush();
+    }
+
+    fn dump_frame(
+        self: *Render,
+        allocator: std.mem.Allocator,
+        frame: []const u8,
+        frame_no: usize,
+    ) !void {
+        const filename = try std.fmt.allocPrint(
+            allocator,
+            "frame_{d:05}.txt",
+            .{frame_no},
+        );
+        defer allocator.free(filename);
+
+        const path = try std.fs.path.join(allocator, &.{ self.output_path.?, filename });
+        defer allocator.free(path);
+
+        var file = try std.fs.cwd().createFile(path, .{});
+        defer file.close();
+        try file.writeAll(frame);
+    }
+
+    fn clear_screen(self: *Render) void {
+        self.writer.writer().writeAll("\x1b[2J") catch {};
+        self.writer.flush() catch {};
+    }
+
+    fn cursor_hide(self: *Render) void {
+        self.writer.writer().writeAll("\x1b[?25l") catch {};
+        self.writer.flush() catch {};
+    }
+
+    fn cursor_show(self: *Render) void {
+        self.writer.writer().writeAll("\x1b[?25h") catch {};
+        self.writer.flush() catch {};
+    }
+};
+
+pub const Video = struct {
+    core: *corelib.Core = undefined,
     fps: f64,
     frame_ns: u64,
     width: usize,
@@ -42,18 +132,6 @@ pub const Video = struct {
         self.frame_ascii_buffer.deinit();
         self.allocator.free(self.frame);
         self.allocator.destroy(self);
-    }
-
-    pub fn set_output(self: *Video, output: ?[]const u8) void {
-        self.output_path = output;
-        if (output) |_| {
-            self.mode = .Dump;
-        } else {
-            self.mode = .Realtime;
-            const stdout_file = std.io.getStdOut().writer();
-            const bw = std.io.bufferedWriter(stdout_file);
-            self.writer = bw;
-        }
     }
 
     pub fn set_edge_detection(self: *Video) !void {
@@ -115,18 +193,6 @@ pub const Video = struct {
         return self.frame_ascii_buffer.items;
     }
 
-    fn handle_frame(self: *Video, frame_no: usize) !void {
-        const ascii = try self.frame_to_ascii();
-        switch (self.mode) {
-            .Realtime => {
-                try print_frame(&self.writer, ascii);
-            },
-            .Dump => {
-                try dump_frame(self.allocator, frame_no, ascii, self.output_path.?);
-            },
-        }
-    }
-
     fn process_frame(video: *Video) !void {
         if (video.core.edge_detection) {
             var timer = try corelib.time.Timer.start_add(&video.core.stats.edge_detect);
@@ -183,14 +249,17 @@ pub fn process_video(
     var video = try Video.init(allocator, height, width);
     defer video.deinit();
     video.core = core;
-    video.set_output(output);
     try video.set_edge_detection();
-    if (video.mode == .Realtime) {
-        clear_screen(&video.writer);
-        cursor_hide(&video.writer);
+
+    var render = try Render.init(allocator, height, width);
+    defer render.deinit(allocator);
+    render.set_output(output);
+    if (render.mode == .Realtime) {
+        render.clear_screen();
+        render.cursor_hide();
     }
     defer {
-        if (video.mode == .Realtime) cursor_show(&video.writer);
+        if (render.mode == .Realtime) render.cursor_show();
     }
 
     const stream = fmt_ctx.*.streams[video_stream_index];
@@ -209,7 +278,7 @@ pub fn process_video(
             while (av.receive_frame(codec_ctx, frame) == 0) {
                 timer_read.stop();
                 defer timer_read.reset();
-                if (video.mode == .Realtime and core.drop_frames) {
+                if (render.mode == .Realtime and core.drop_frames) {
                     const target_time = core.stats.frames_n.? * video.frame_ns;
                     const elapsed = timer_fps.read();
                     if (elapsed > target_time + video.frame_ns) {
@@ -234,10 +303,15 @@ pub fn process_video(
                 timer_scale.stop();
 
                 try video.process_frame();
-                try video.handle_frame(core.stats.frames_n.?);
+
+                try render.handle_frame(
+                    allocator,
+                    try video.frame_to_ascii(),
+                    core.stats.frames_n.?,
+                );
 
                 core.stats.frames_n.? += 1;
-                if (video.mode == .Dump) continue;
+                if (render.mode == .Dump) continue;
 
                 // Target time for the next frame
                 const next_target_time = (core.stats.frames_n.?) * video.frame_ns;
@@ -270,46 +344,4 @@ fn compress_frame(frame: *av.Frame, dst: []u32) !void {
             pix.* = @byteSwap(pix.*);
         }
     }
-}
-
-fn clear_screen(bw: *std.io.BufferedWriter(4096, std.fs.File.Writer)) void {
-    bw.writer().writeAll("\x1b[2J") catch {};
-    bw.flush() catch {};
-}
-
-fn cursor_hide(bw: *std.io.BufferedWriter(4096, std.fs.File.Writer)) void {
-    bw.writer().writeAll("\x1b[?25l") catch {};
-    bw.flush() catch {};
-}
-
-fn cursor_show(bw: *std.io.BufferedWriter(4096, std.fs.File.Writer)) void {
-    bw.writer().writeAll("\x1b[?25h") catch {};
-    bw.flush() catch {};
-}
-
-fn print_frame(
-    bw: *std.io.BufferedWriter(4096, std.fs.File.Writer),
-    ascii: []const u8,
-) !void {
-    const writer = bw.writer();
-    try writer.writeAll("\x1b[H");
-    try writer.writeAll(ascii);
-    try bw.flush();
-}
-
-fn dump_frame(
-    allocator: std.mem.Allocator,
-    frame_no: usize,
-    ascii: []const u8,
-    output_path: []const u8,
-) !void {
-    const filename = try std.fmt.allocPrint(allocator, "frame_{d:05}.txt", .{frame_no});
-    defer allocator.free(filename);
-
-    const path = try std.fs.path.join(allocator, &.{ output_path, filename });
-    defer allocator.free(path);
-
-    var file = try std.fs.cwd().createFile(path, .{});
-    defer file.close();
-    try file.writeAll(ascii);
 }
