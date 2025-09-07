@@ -8,12 +8,14 @@ pub const OutputMode = enum {
 };
 
 const Render = struct {
-    frame: []const u8 = undefined,
     width: usize,
     height: usize,
+    frames_total: usize = 0,
+    show_progress: bool = false,
+    bar_width: usize = 40,
     mode: OutputMode = .Realtime,
     output_path: ?[]const u8 = null,
-    writer: std.io.BufferedWriter(4096, std.fs.File.Writer) = undefined,
+    bw: std.io.BufferedWriter(4096, std.fs.File.Writer) = undefined,
 
     fn init(allocator: std.mem.Allocator, height: usize, width: usize) !*Render {
         const render = try allocator.create(Render);
@@ -34,10 +36,10 @@ const Render = struct {
             self.mode = .Dump;
         } else {
             self.mode = .Realtime;
-            const stdout_file = std.io.getStdOut().writer();
-            const bw = std.io.bufferedWriter(stdout_file);
-            self.writer = bw;
         }
+        const stdout_file = std.io.getStdOut().writer();
+        const bw = std.io.bufferedWriter(stdout_file);
+        self.bw = bw;
     }
 
     fn handle_frame(
@@ -54,13 +56,14 @@ const Render = struct {
                 try self.dump_frame(allocator, frame, frame_no);
             },
         }
+        if (self.show_progress) self.print_progress(frame_no);
     }
 
     fn print_frame(self: *Render, frame: []const u8) !void {
-        const writer = self.writer.writer();
+        const writer = self.bw.writer();
         try writer.writeAll("\x1b[H");
         try writer.writeAll(frame);
-        try self.writer.flush();
+        try self.bw.flush();
     }
 
     fn dump_frame(
@@ -84,19 +87,37 @@ const Render = struct {
         try file.writeAll(frame);
     }
 
+    fn print_progress(self: *Render, frame_no: usize) void {
+        if (self.frames_total == 0) return;
+        const writer = self.bw.writer();
+        const percentage: f64 = @as(f64, @floatFromInt(frame_no)) /
+            @as(f64, @floatFromInt(self.frames_total));
+        const filled: usize = @intFromFloat(@ceil(percentage *
+            @as(f64, @floatFromInt(self.bar_width))));
+        const empty: usize = self.bar_width - filled;
+
+        writer.writeAll("\x1b[0G\x1b[0K") catch {};
+        writer.writeAll("[") catch {};
+        for (0..filled) |_| writer.writeAll("#") catch {};
+        for (0..empty) |_| writer.writeAll("-") catch {};
+        writer.writeAll("] ") catch {};
+        writer.print("{d:.0}%", .{percentage * 100}) catch {};
+        self.bw.flush() catch {};
+    }
+
     fn clear_screen(self: *Render) void {
-        self.writer.writer().writeAll("\x1b[2J") catch {};
-        self.writer.flush() catch {};
+        self.bw.writer().writeAll("\x1b[2J") catch {};
+        self.bw.flush() catch {};
     }
 
     fn cursor_hide(self: *Render) void {
-        self.writer.writer().writeAll("\x1b[?25l") catch {};
-        self.writer.flush() catch {};
+        self.bw.writer().writeAll("\x1b[?25l") catch {};
+        self.bw.flush() catch {};
     }
 
     fn cursor_show(self: *Render) void {
-        self.writer.writer().writeAll("\x1b[?25h") catch {};
-        self.writer.flush() catch {};
+        self.bw.writer().writeAll("\x1b[?25h") catch {};
+        self.bw.flush() catch {};
     }
 };
 
@@ -214,6 +235,7 @@ pub fn process_video(
     core: *corelib.Core,
     path: []const u8,
     output: ?[]const u8,
+    display_progress: bool,
 ) !void {
     const fmt_ctx: *av.FormatCtx = try av.open_video_file(path);
     const video_stream_index: usize = try av.get_stream_ind(fmt_ctx);
@@ -262,10 +284,12 @@ pub fn process_video(
         if (render.mode == .Realtime) render.cursor_show();
     }
 
-    const stream = fmt_ctx.*.streams[video_stream_index];
+    const stream: *av.Stream = fmt_ctx.*.streams[video_stream_index];
     const target_fps = @as(f64, @floatFromInt(stream.*.avg_frame_rate.num)) /
         @as(f64, @floatFromInt(stream.*.avg_frame_rate.den));
     video.set_target_fps(target_fps);
+    render.frames_total = total_frames(stream);
+    render.show_progress = display_progress;
 
     var timer_read = try corelib.time.Timer.start(&core.stats.read);
     var timer_fps = try corelib.time.Timer.start(&core.stats.fps.?);
@@ -344,4 +368,23 @@ fn compress_frame(frame: *av.Frame, dst: []u32) !void {
             pix.* = @byteSwap(pix.*);
         }
     }
+}
+
+fn total_frames(stream: *av.Stream) usize {
+    if (stream.nb_frames > 0) {
+        return @intCast(stream.nb_frames);
+    }
+    if (stream.duration > 0 and stream.avg_frame_rate.den != 0) {
+        const duration_sec = @as(f64, @floatFromInt(stream.duration)) *
+            @as(f64, @floatFromInt(stream.time_base.num)) /
+            @as(f64, @floatFromInt(stream.time_base.den));
+
+        const fps = @as(f64, @floatFromInt(stream.avg_frame_rate.num)) /
+            @as(f64, @floatFromInt(stream.avg_frame_rate.den));
+
+        if (fps > 0) {
+            return @intFromFloat(duration_sec * fps);
+        }
+    }
+    return 0;
 }

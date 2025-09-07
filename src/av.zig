@@ -16,6 +16,7 @@ pub const Frame = c.AVFrame;
 
 pub const FormatCtx = c.AVFormatContext;
 pub const CodecCtx = c.struct_AVCodecContext;
+pub const Stream = c.struct_AVStream;
 
 pub fn open_video_file(file_path: []const u8) !*FormatCtx {
     var fmt_ctx: ?*c.AVFormatContext = null;
