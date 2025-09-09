@@ -28,4 +28,4 @@ jobs:
         run: zig fmt --check ./*.zig src/*.zig
 
       - name: Test
-        run: zig build test
+        run: zig build test -Dvideo=true
