@@ -23,6 +23,16 @@ jobs:
         with:
           version: ${{ matrix.zig-version }}
 
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: choco install -y ffmpeg-shared
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+
       - name: Check format
         if: runner.os == 'Linux'
         run: zig fmt --check ./*.zig src/*.zig
