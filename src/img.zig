@@ -112,26 +112,36 @@ pub const Image = struct {
     ) !void {
         const c: []const u8 = self.get_char(x, y);
         if (self.core.color) switch (self.core.color_mode) {
-            .color256 => try corelib.append_256_color(buffer, c, self.pixels[y * self.width + x]),
-            .truecolor => try corelib.append_truecolor(buffer, c, self.pixels[y * self.width + x]),
+            .color256 => try corelib.append_256_color(
+                self.allocator,
+                buffer,
+                c,
+                self.pixels[y * self.width + x],
+            ),
+            .truecolor => try corelib.append_truecolor(
+                self.allocator,
+                buffer,
+                c,
+                self.pixels[y * self.width + x],
+            ),
         } else {
-            try buffer.appendSlice(c);
-            try buffer.appendSlice(c);
+            try buffer.appendSlice(self.allocator, c);
+            try buffer.appendSlice(self.allocator, c);
         }
     }
 
     pub fn to_ascii(self: *Image) ![]const u8 {
         var timer = try corelib.time.Timer.start(&self.core.stats.converting);
         defer timer.stop();
-        var buffer = std.ArrayList(u8).init(self.allocator);
-        defer buffer.deinit();
+        var buffer = try std.ArrayList(u8).initCapacity(self.allocator, 1024);
+        defer buffer.deinit(self.allocator);
         for (0..self.height) |y| {
             for (0..self.width) |x| {
                 try self.pixel_to_ascii(&buffer, x, y);
             }
-            try buffer.appendSlice("\n");
+            try buffer.appendSlice(self.allocator, "\n");
         }
-        return buffer.toOwnedSlice();
+        return buffer.toOwnedSlice(self.allocator);
     }
 };
 

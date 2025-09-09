@@ -124,7 +124,7 @@ pub fn main() !void {
     const args = try arg.parse_args(alloc, args_str[1..]);
     defer alloc.free(args);
 
-    const cli_result = cli.validate_parsed_args(args, &app);
+    const cli_result = try cli.validate_parsed_args(alloc, args, &app);
     var cli_ = handle_cli(cli_result) orelse return;
 
     const err = try exec.cmd_func(alloc, &cli_, &app);

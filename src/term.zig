@@ -17,7 +17,7 @@ fn term_size_linux() !TermSize {
     const posix = std.posix;
     var ws: posix.winsize = undefined;
     const err = posix.system.ioctl(
-        std.io.getStdOut().handle,
+        std.fs.File.stdout().handle,
         posix.T.IOCGWINSZ,
         @intFromPtr(&ws),
     );

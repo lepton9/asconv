@@ -13,15 +13,15 @@ const app = cmd.ArgsStructure{
 
 test "sobel" {
     const alloc = std.testing.allocator;
-    var args = std.ArrayList(arg.ArgParse).init(alloc);
-    try args.append(.{ .value = "ascii" });
-    try args.append(.{ .option = .{ .name = "out", .option_type = .long, .value = "out.txt" } });
-    try args.append(.{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
-    try args.append(.{ .option = .{ .name = "edges", .option_type = .long, .value = "sobel" } });
-    try args.append(.{ .value = test_image });
-    defer args.deinit();
+    var args = try std.ArrayList(arg.ArgParse).initCapacity(alloc, 5);
+    try args.append(alloc, .{ .value = "ascii" });
+    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = "out.txt" } });
+    try args.append(alloc, .{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
+    try args.append(alloc, .{ .option = .{ .name = "edges", .option_type = .long, .value = "sobel" } });
+    try args.append(alloc, .{ .value = test_image });
+    defer args.deinit(alloc);
 
-    const cli_result = cli.validate_parsed_args(args.items, &app);
+    const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
     if (cli_result.is_ok()) {
         var cli_ = try cli_result.unwrap_try();
         if (try exec.cmd_func(alloc, &cli_, &app)) |err| {
@@ -32,16 +32,16 @@ test "sobel" {
 
 test "dog" {
     const alloc = std.testing.allocator;
-    var args = std.ArrayList(arg.ArgParse).init(alloc);
-    try args.append(.{ .value = "ascii" });
-    try args.append(.{ .option = .{ .name = "out", .option_type = .long, .value = "out.txt" } });
-    try args.append(.{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
-    try args.append(.{ .option = .{ .name = "edges", .option_type = .long, .value = "dog" } });
-    try args.append(.{ .option = .{ .name = "sigma", .option_type = .long, .value = "1.0" } });
-    try args.append(.{ .value = test_image });
-    defer args.deinit();
+    var args = try std.ArrayList(arg.ArgParse).initCapacity(alloc, 6);
+    try args.append(alloc, .{ .value = "ascii" });
+    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = "out.txt" } });
+    try args.append(alloc, .{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
+    try args.append(alloc, .{ .option = .{ .name = "edges", .option_type = .long, .value = "dog" } });
+    try args.append(alloc, .{ .option = .{ .name = "sigma", .option_type = .long, .value = "1.0" } });
+    try args.append(alloc, .{ .value = test_image });
+    defer args.deinit(alloc);
 
-    const cli_result = cli.validate_parsed_args(args.items, &app);
+    const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
     if (cli_result.is_ok()) {
         var cli_ = try cli_result.unwrap_try();
         if (try exec.cmd_func(alloc, &cli_, &app)) |err| {
@@ -52,16 +52,16 @@ test "dog" {
 
 test "log" {
     const alloc = std.testing.allocator;
-    var args = std.ArrayList(arg.ArgParse).init(alloc);
-    try args.append(.{ .value = "ascii" });
-    try args.append(.{ .option = .{ .name = "out", .option_type = .long, .value = "out.txt" } });
-    try args.append(.{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
-    try args.append(.{ .option = .{ .name = "edges", .option_type = .long, .value = "log" } });
-    try args.append(.{ .option = .{ .name = "sigma", .option_type = .long, .value = "1.0" } });
-    try args.append(.{ .value = test_image });
-    defer args.deinit();
+    var args = try std.ArrayList(arg.ArgParse).initCapacity(alloc, 6);
+    try args.append(alloc, .{ .value = "ascii" });
+    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = "out.txt" } });
+    try args.append(alloc, .{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
+    try args.append(alloc, .{ .option = .{ .name = "edges", .option_type = .long, .value = "log" } });
+    try args.append(alloc, .{ .option = .{ .name = "sigma", .option_type = .long, .value = "1.0" } });
+    try args.append(alloc, .{ .value = test_image });
+    defer args.deinit(alloc);
 
-    const cli_result = cli.validate_parsed_args(args.items, &app);
+    const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
     if (cli_result.is_ok()) {
         var cli_ = try cli_result.unwrap_try();
         if (try exec.cmd_func(alloc, &cli_, &app)) |err| {
@@ -72,15 +72,15 @@ test "log" {
 
 test "color" {
     const alloc = std.testing.allocator;
-    var args = std.ArrayList(arg.ArgParse).init(alloc);
-    try args.append(.{ .value = "ascii" });
-    try args.append(.{ .option = .{ .name = "out", .option_type = .long, .value = "out.txt" } });
-    try args.append(.{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
-    try args.append(.{ .option = .{ .name = "color", .option_type = .long, .value = "color256" } });
-    try args.append(.{ .value = test_image });
-    defer args.deinit();
+    var args = try std.ArrayList(arg.ArgParse).initCapacity(alloc, 5);
+    try args.append(alloc, .{ .value = "ascii" });
+    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = "out.txt" } });
+    try args.append(alloc, .{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
+    try args.append(alloc, .{ .option = .{ .name = "color", .option_type = .long, .value = "color256" } });
+    try args.append(alloc, .{ .value = test_image });
+    defer args.deinit(alloc);
 
-    const cli_result = cli.validate_parsed_args(args.items, &app);
+    const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
     if (cli_result.is_ok()) {
         var cli_ = try cli_result.unwrap_try();
         if (try exec.cmd_func(alloc, &cli_, &app)) |err| {
@@ -91,16 +91,16 @@ test "color" {
 
 test "charset" {
     const alloc = std.testing.allocator;
-    var args = std.ArrayList(arg.ArgParse).init(alloc);
-    try args.append(.{ .value = "ascii" });
-    try args.append(.{ .option = .{ .name = "out", .option_type = .long, .value = "out.txt" } });
-    try args.append(.{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
-    try args.append(.{ .option = .{ .name = "charset", .option_type = .long, .value = "@#%xo;:.," } });
-    try args.append(.{ .option = .{ .name = "reverse", .option_type = .long, .value = null } });
-    try args.append(.{ .value = test_image });
-    defer args.deinit();
+    var args = try std.ArrayList(arg.ArgParse).initCapacity(alloc, 6);
+    try args.append(alloc, .{ .value = "ascii" });
+    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = "out.txt" } });
+    try args.append(alloc, .{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
+    try args.append(alloc, .{ .option = .{ .name = "charset", .option_type = .long, .value = "@#%xo;:.," } });
+    try args.append(alloc, .{ .option = .{ .name = "reverse", .option_type = .long, .value = null } });
+    try args.append(alloc, .{ .value = test_image });
+    defer args.deinit(alloc);
 
-    const cli_result = cli.validate_parsed_args(args.items, &app);
+    const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
     if (cli_result.is_ok()) {
         var cli_ = try cli_result.unwrap_try();
         if (try exec.cmd_func(alloc, &cli_, &app)) |err| {

@@ -13,14 +13,14 @@ const app = cmd.ArgsStructure{
 
 test "video" {
     const alloc = std.testing.allocator;
-    var args = std.ArrayList(arg.ArgParse).init(alloc);
-    try args.append(.{ .value = "asciivid" });
-    try args.append(.{ .option = .{ .name = "out", .option_type = .long, .value = "output" } });
-    try args.append(.{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
-    try args.append(.{ .value = test_input });
-    defer args.deinit();
+    var args = try std.ArrayList(arg.ArgParse).initCapacity(alloc, 5);
+    try args.append(alloc, .{ .value = "asciivid" });
+    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = "output" } });
+    try args.append(alloc, .{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
+    try args.append(alloc, .{ .value = test_input });
+    defer args.deinit(alloc);
 
-    const cli_result = cli.validate_parsed_args(args.items, &app);
+    const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
     if (cli_result.is_ok()) {
         var cli_ = try cli_result.unwrap_try();
         if (try exec.cmd_func(alloc, &cli_, &app)) |err| {

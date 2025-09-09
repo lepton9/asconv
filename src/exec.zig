@@ -67,11 +67,11 @@ fn write_to_file(file_path: []const u8, data: []const u8) !void {
 }
 
 fn write_to_stdio(data: []const u8) !void {
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
     try stdout.print("{s}\n", .{data});
-    try bw.flush();
+    try stdout.flush();
 }
 
 fn validate_url(uri: std.Uri) !void {
@@ -91,16 +91,17 @@ fn is_url(input: []const u8) !bool {
 fn fetch_url_content(allocator: std.mem.Allocator, url: []const u8) ![]const u8 {
     var client = std.http.Client{ .allocator = allocator };
     defer client.deinit();
-    var data = std.ArrayList(u8).init(allocator);
+    var writer = std.Io.Writer.Allocating.init(allocator);
+    defer writer.deinit();
 
     const res = try client.fetch(.{
         .method = .GET,
         .location = .{ .url = url },
-        .response_storage = .{ .dynamic = &data },
+        .response_writer = &writer.writer,
     });
 
     if (res.status != std.http.Status.ok) return ExecError.FetchError;
-    return data.toOwnedSlice();
+    return try writer.toOwnedSlice();
 }
 
 fn get_input_image(allocator: std.mem.Allocator, filepath: []const u8) ResultImage {
@@ -147,15 +148,16 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     }, filename);
 
     var buffer: [256]u8 = undefined;
-    var buf = std.ArrayList(u8).init(allocator);
-    defer buf.deinit();
-    try buf.appendSlice(try std.fmt.bufPrint(&buffer, "Image: {s}\n", .{filename}));
-    try buf.appendSlice(try std.fmt.bufPrint(
+    var buf = try std.ArrayList(u8).initCapacity(allocator, 1024);
+    defer buf.deinit(allocator);
+    try buf.appendSlice(allocator, try std.fmt.bufPrint(&buffer, "Image: {s}\n", .{filename}));
+    try buf.appendSlice(allocator, try std.fmt.bufPrint(
         &buffer,
         "Size: {d}x{d}\n",
         .{ img.raw_image.width, img.raw_image.height },
     ));
     try buf.appendSlice(
+        allocator,
         try std.fmt.bufPrint(&buffer, "Channels: {d}\n", .{img.raw_image.nchan}),
     );
     try write_to_stdio(buf.items);
@@ -341,63 +343,69 @@ fn ascii_opts(
 }
 
 fn show_stats_image(
+    allocator: std.mem.Allocator,
     buffer: *std.ArrayList(u8),
     stats: *time.Stats,
 ) !void {
     var line_buf: [256]u8 = undefined;
-    try buffer.appendSlice(try std.fmt.bufPrint(&line_buf, "Scaling: {d:.3} s\n", .{time.to_s(stats.scaling)}));
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(&line_buf, "Scaling: {d:.3} s\n", .{time.to_s(stats.scaling)}));
     try buffer.appendSlice(
+        allocator,
         try std.fmt.bufPrint(&line_buf, "Edge detecting: {d:.3} s\n", .{time.to_s(stats.edge_detect)}),
     );
     try buffer.appendSlice(
+        allocator,
         try std.fmt.bufPrint(&line_buf, "Converting: {d:.3} s\n", .{time.to_s(stats.converting)}),
     );
     try buffer.appendSlice(
+        allocator,
         try std.fmt.bufPrint(&line_buf, "Read: {d:.3} s\n", .{time.to_s(stats.read)}),
     );
     try buffer.appendSlice(
+        allocator,
         try std.fmt.bufPrint(&line_buf, "Write: {d:.3} s\n", .{time.to_s(stats.write)}),
     );
 }
 
 fn show_stats_video(
+    allocator: std.mem.Allocator,
     buffer: *std.ArrayList(u8),
     stats: *time.Stats,
 ) !void {
     var line_buf: [256]u8 = undefined;
     const frames_float = @as(f64, @floatFromInt(stats.frames_n orelse 0));
-    try buffer.appendSlice(try std.fmt.bufPrint(
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Scaling: {d:.3} s/f\n",
         .{time.to_s(stats.scaling) / frames_float},
     ));
-    try buffer.appendSlice(try std.fmt.bufPrint(
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Edge detecting: {d:.3} s/f\n",
         .{time.to_s(stats.edge_detect) / frames_float},
     ));
-    try buffer.appendSlice(try std.fmt.bufPrint(
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Converting: {d:.3} s/f\n",
         .{time.to_s(stats.converting) / frames_float},
     ));
-    try buffer.appendSlice(try std.fmt.bufPrint(
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Read: {d:.3} s/f\n",
         .{time.to_s(stats.read) / frames_float},
     ));
-    try buffer.appendSlice(try std.fmt.bufPrint(
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Write: {d:.3} s/f\n",
         .{time.to_s(stats.write) / frames_float},
     ));
-    try buffer.appendSlice(try std.fmt.bufPrint(&line_buf, "Fps: {d:.1}\n", .{
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(&line_buf, "Fps: {d:.1}\n", .{
         frames_float / time.to_s(stats.fps.?),
     }));
-    try buffer.appendSlice(try std.fmt.bufPrint(&line_buf, "Frames: {d}\n", .{
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(&line_buf, "Frames: {d}\n", .{
         stats.frames_n.?,
     }));
-    try buffer.appendSlice(try std.fmt.bufPrint(&line_buf, "Dropped frames: {d}\n", .{
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(&line_buf, "Dropped frames: {d}\n", .{
         stats.dropped_frames.?,
     }));
 }
@@ -408,14 +416,14 @@ fn show_performance(
     file_type: corelib.MediaType,
 ) !void {
     var line_buf: [256]u8 = undefined;
-    var buffer = std.ArrayList(u8).init(allocator);
-    defer buffer.deinit();
-    try buffer.append('\n');
+    var buffer = try std.ArrayList(u8).initCapacity(allocator, 1024);
+    defer buffer.deinit(allocator);
+    try buffer.append(allocator, '\n');
     switch (file_type) {
-        .Video => try show_stats_video(&buffer, stats),
-        else => try show_stats_image(&buffer, stats),
+        .Video => try show_stats_video(allocator, &buffer, stats),
+        else => try show_stats_image(allocator, &buffer, stats),
     }
-    try buffer.appendSlice(try std.fmt.bufPrint(
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Total time taken: {d:.3} s\n",
         .{time.to_s(stats.total)},
@@ -424,12 +432,12 @@ fn show_performance(
 }
 
 fn help(allocator: std.mem.Allocator, args_struct: *const cmd.ArgsStructure) !void {
-    var buf = std.ArrayList(u8).init(allocator);
-    defer buf.deinit();
-    try buf.appendSlice("Usage: asconv [command] [options]\n\n");
+    var buf = try std.ArrayList(u8).initCapacity(allocator, 1024);
+    defer buf.deinit(allocator);
+    try buf.appendSlice(allocator, "Usage: asconv [command] [options]\n\n");
     const args = try args_struct.args_structure_string(allocator);
     defer allocator.free(args);
-    try buf.appendSlice(args);
+    try buf.appendSlice(allocator, args);
     try write_to_stdio(buf.items);
 }
 

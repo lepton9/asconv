@@ -50,16 +50,16 @@ pub const AsciiInfo = struct {
         ascii_chars: []const u8,
     ) !void {
         self.char_table = try allocator.dupe(u8, ascii_chars);
-        var char_info = std.ArrayList(AsciiCharInfo).init(allocator);
-        defer char_info.deinit();
+        var char_info = try std.ArrayList(AsciiCharInfo).initCapacity(allocator, 20);
+        defer char_info.deinit(allocator);
         var i: usize = 0;
         while (i < ascii_chars.len) {
             const len = try std.unicode.utf8ByteSequenceLength(ascii_chars[i]);
-            try char_info.append(.{ .start = i, .len = @intCast(len) });
+            try char_info.append(allocator, .{ .start = i, .len = @intCast(len) });
             i += len;
         }
         self.len = @intCast(self.char_table.len);
-        self.char_info = try char_info.toOwnedSlice();
+        self.char_info = try char_info.toOwnedSlice(allocator);
     }
 
     pub fn set_charset(
@@ -78,13 +78,13 @@ pub const AsciiInfo = struct {
     }
 
     pub fn reverse(self: *AsciiInfo, allocator: std.mem.Allocator) !void {
-        var reversed = std.ArrayList(u8).init(allocator);
-        defer reversed.deinit();
+        var reversed = try std.ArrayList(u8).initCapacity(allocator, 20);
+        defer reversed.deinit(allocator);
         var i = self.char_info.len;
         while (i > 0) {
             i -= 1;
             const info = self.char_info[i];
-            try reversed.appendSlice(self.char_table[info.start .. info.start + info.len]);
+            try reversed.appendSlice(allocator, self.char_table[info.start .. info.start + info.len]);
         }
         try self.set_charset(allocator, reversed.items);
     }
@@ -633,18 +633,28 @@ pub fn rgb_to_ansi256(r_: u8, g_: u8, b_: u8) u8 {
     return 16 + 36 * r6 + 6 * g6 + b6;
 }
 
-pub fn append_256_color(buffer: *std.ArrayList(u8), char: []const u8, p: u32) !void {
+pub fn append_256_color(
+    allocator: std.mem.Allocator,
+    buffer: *std.ArrayList(u8),
+    char: []const u8,
+    p: u32,
+) !void {
     var buf: [64]u8 = undefined;
-    try buffer.appendSlice(try std.fmt.bufPrint(
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &buf,
         "\x1b[38;5;{d}m{s}{s}\x1b[0m",
         .{ rgb_to_ansi256(r(p), g(p), b(p)), char, char },
     ));
 }
 
-pub fn append_truecolor(buffer: *std.ArrayList(u8), char: []const u8, p: u32) !void {
+pub fn append_truecolor(
+    allocator: std.mem.Allocator,
+    buffer: *std.ArrayList(u8),
+    char: []const u8,
+    p: u32,
+) !void {
     var buf: [64]u8 = undefined;
-    try buffer.appendSlice(try std.fmt.bufPrint(
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &buf,
         "\x1b[38;2;{d};{d};{d}m{s}{s}\x1b[0m",
         .{ r(p), g(p), b(p), char, char },

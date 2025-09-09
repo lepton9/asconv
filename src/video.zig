@@ -15,13 +15,16 @@ const Render = struct {
     bar_width: usize = 40,
     mode: OutputMode = .Realtime,
     output_path: ?[]const u8 = null,
-    bw: std.io.BufferedWriter(4096, std.fs.File.Writer) = undefined,
+    writer: *std.Io.Writer,
 
     fn init(allocator: std.mem.Allocator, height: usize, width: usize) !*Render {
         const render = try allocator.create(Render);
+        var stdout_buffer: [1024]u8 = undefined;
+        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
         render.* = .{
             .width = width,
             .height = height,
+            .writer = &stdout_writer.interface,
         };
         return render;
     }
@@ -37,9 +40,6 @@ const Render = struct {
         } else {
             self.mode = .Realtime;
         }
-        const stdout_file = std.io.getStdOut().writer();
-        const bw = std.io.bufferedWriter(stdout_file);
-        self.bw = bw;
     }
 
     fn handle_frame(
@@ -60,10 +60,9 @@ const Render = struct {
     }
 
     fn print_frame(self: *Render, frame: []const u8) !void {
-        const writer = self.bw.writer();
-        try writer.writeAll("\x1b[H");
-        try writer.writeAll(frame);
-        try self.bw.flush();
+        try self.writer.writeAll("\x1b[H");
+        try self.writer.writeAll(frame);
+        try self.writer.flush();
     }
 
     fn dump_frame(
@@ -89,7 +88,7 @@ const Render = struct {
 
     fn print_progress(self: *Render, frame_no: usize) void {
         if (self.frames_total == 0) return;
-        const writer = self.bw.writer();
+        const writer = self.writer;
         const percentage: f64 = @as(f64, @floatFromInt(frame_no)) /
             @as(f64, @floatFromInt(self.frames_total));
         const filled: usize = @intFromFloat(@ceil(percentage *
@@ -102,22 +101,22 @@ const Render = struct {
         for (0..empty) |_| writer.writeAll("-") catch {};
         writer.writeAll("] ") catch {};
         writer.print("{d:.0}%", .{percentage * 100}) catch {};
-        self.bw.flush() catch {};
+        writer.flush() catch {};
     }
 
     fn clear_screen(self: *Render) void {
-        self.bw.writer().writeAll("\x1b[2J") catch {};
-        self.bw.flush() catch {};
+        self.writer.writeAll("\x1b[2J") catch {};
+        self.writer.flush() catch {};
     }
 
     fn cursor_hide(self: *Render) void {
-        self.bw.writer().writeAll("\x1b[?25l") catch {};
-        self.bw.flush() catch {};
+        self.writer.writeAll("\x1b[?25l") catch {};
+        self.writer.flush() catch {};
     }
 
     fn cursor_show(self: *Render) void {
-        self.bw.writer().writeAll("\x1b[?25h") catch {};
-        self.bw.flush() catch {};
+        self.writer.writeAll("\x1b[?25h") catch {};
+        self.writer.flush() catch {};
     }
 };
 
@@ -141,7 +140,10 @@ pub const Video = struct {
             .height = height,
             .width = width,
             .frame = try allocator.alloc(u32, height * width),
-            .frame_ascii_buffer = std.ArrayList(u8).init(allocator),
+            .frame_ascii_buffer = try std.ArrayList(u8).initCapacity(
+                allocator,
+                width * height * 256,
+            ),
         };
         return video;
     }
@@ -150,7 +152,7 @@ pub const Video = struct {
         if (self.edges) |edges| {
             edges.deinit(self.allocator);
         }
-        self.frame_ascii_buffer.deinit();
+        self.frame_ascii_buffer.deinit(self.allocator);
         self.allocator.free(self.frame);
         self.allocator.destroy(self);
     }
@@ -193,11 +195,11 @@ pub const Video = struct {
     ) !void {
         const c: []const u8 = self.get_char(x, y);
         if (self.core.color) switch (self.core.color_mode) {
-            .color256 => try corelib.append_256_color(buffer, c, self.frame[y * self.width + x]),
-            .truecolor => try corelib.append_truecolor(buffer, c, self.frame[y * self.width + x]),
+            .color256 => try corelib.append_256_color(self.allocator, buffer, c, self.frame[y * self.width + x]),
+            .truecolor => try corelib.append_truecolor(self.allocator, buffer, c, self.frame[y * self.width + x]),
         } else {
-            try buffer.appendSlice(c);
-            try buffer.appendSlice(c);
+            try buffer.appendSlice(self.allocator, c);
+            try buffer.appendSlice(self.allocator, c);
         }
     }
 
@@ -209,7 +211,7 @@ pub const Video = struct {
             for (0..self.width) |x| {
                 try self.pixel_to_ascii(&self.frame_ascii_buffer, x, y);
             }
-            if (y < self.height - 1) try self.frame_ascii_buffer.append('\n');
+            if (y < self.height - 1) try self.frame_ascii_buffer.append(self.allocator, '\n');
         }
         return self.frame_ascii_buffer.items;
     }
@@ -341,7 +343,7 @@ pub fn process_video(
                 const next_target_time = (core.stats.frames_n.?) * video.frame_ns;
                 const now = timer_fps.read();
                 if (now < next_target_time) {
-                    std.time.sleep(next_target_time - now);
+                    std.Thread.sleep(next_target_time - now);
                 }
             }
         }
