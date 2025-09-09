@@ -5,7 +5,7 @@ const cli = @import("cli");
 const cmd = cli.cmd;
 const arg = cli.arg;
 
-fn handle_cli(cli_result: cli.ResultCli) ?cli.Cli {
+fn handle_cli(cli_result: cli.ResultCli) ?*cli.Cli {
     return cli_result.unwrap_try() catch {
         const err = cli_result.unwrap_err();
         switch (err.err) {
@@ -126,7 +126,8 @@ pub fn main() !void {
 
     const cli_result = try cli.validate_parsed_args(alloc, args, &app);
     var cli_ = handle_cli(cli_result) orelse return;
+    defer cli_.deinit(alloc);
 
-    const err = try exec.cmd_func(alloc, &cli_, &app);
+    const err = try exec.cmd_func(alloc, cli_, &app);
     if (err) |e| handle_exec_error(e);
 }

@@ -23,8 +23,9 @@ test "sobel" {
 
     const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
     if (cli_result.is_ok()) {
-        var cli_ = try cli_result.unwrap_try();
-        if (try exec.cmd_func(alloc, &cli_, &app)) |err| {
+        const cli_ = try cli_result.unwrap_try();
+        defer cli_.deinit(alloc);
+        if (try exec.cmd_func(alloc, cli_, &app)) |err| {
             std.debug.print("Error: {}\n", .{err.err});
         }
     }
@@ -43,8 +44,9 @@ test "dog" {
 
     const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
     if (cli_result.is_ok()) {
-        var cli_ = try cli_result.unwrap_try();
-        if (try exec.cmd_func(alloc, &cli_, &app)) |err| {
+        const cli_ = try cli_result.unwrap_try();
+        defer cli_.deinit(alloc);
+        if (try exec.cmd_func(alloc, cli_, &app)) |err| {
             std.debug.print("Error: {}\n", .{err.err});
         }
     }
@@ -63,8 +65,9 @@ test "log" {
 
     const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
     if (cli_result.is_ok()) {
-        var cli_ = try cli_result.unwrap_try();
-        if (try exec.cmd_func(alloc, &cli_, &app)) |err| {
+        const cli_ = try cli_result.unwrap_try();
+        defer cli_.deinit(alloc);
+        if (try exec.cmd_func(alloc, cli_, &app)) |err| {
             std.debug.print("Error: {}\n", .{err.err});
         }
     }
@@ -82,8 +85,9 @@ test "color" {
 
     const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
     if (cli_result.is_ok()) {
-        var cli_ = try cli_result.unwrap_try();
-        if (try exec.cmd_func(alloc, &cli_, &app)) |err| {
+        const cli_ = try cli_result.unwrap_try();
+        defer cli_.deinit(alloc);
+        if (try exec.cmd_func(alloc, cli_, &app)) |err| {
             std.debug.print("Error: {}\n", .{err.err});
         }
     }
@@ -102,8 +106,9 @@ test "charset" {
 
     const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
     if (cli_result.is_ok()) {
-        var cli_ = try cli_result.unwrap_try();
-        if (try exec.cmd_func(alloc, &cli_, &app)) |err| {
+        const cli_ = try cli_result.unwrap_try();
+        defer cli_.deinit(alloc);
+        if (try exec.cmd_func(alloc, cli_, &app)) |err| {
             std.debug.print("Error: {}\n", .{err.err});
         }
     }
