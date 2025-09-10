@@ -15,16 +15,16 @@ const Render = struct {
     bar_width: usize = 40,
     mode: OutputMode = .Realtime,
     output_path: ?[]const u8 = null,
-    writer: *std.Io.Writer,
+    stdout: std.fs.File.Writer,
 
     fn init(allocator: std.mem.Allocator, height: usize, width: usize) !*Render {
         const render = try allocator.create(Render);
-        var stdout_buffer: [1024]u8 = undefined;
-        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        var buf: [4096]u8 = undefined;
+        const stdout = std.fs.File.stdout().writer(&buf);
         render.* = .{
             .width = width,
             .height = height,
-            .writer = &stdout_writer.interface,
+            .stdout = stdout,
         };
         return render;
     }
@@ -60,9 +60,9 @@ const Render = struct {
     }
 
     fn print_frame(self: *Render, frame: []const u8) !void {
-        try self.writer.writeAll("\x1b[H");
-        try self.writer.writeAll(frame);
-        try self.writer.flush();
+        try self.stdout.interface.writeAll("\x1b[H");
+        try self.stdout.interface.writeAll(frame);
+        try self.stdout.interface.flush();
     }
 
     fn dump_frame(
@@ -88,35 +88,35 @@ const Render = struct {
 
     fn print_progress(self: *Render, frame_no: usize) void {
         if (self.frames_total == 0) return;
-        const writer = self.writer;
+        var stdout = self.stdout.interface;
         const percentage: f64 = @as(f64, @floatFromInt(frame_no)) /
             @as(f64, @floatFromInt(self.frames_total));
         const filled: usize = @intFromFloat(@ceil(percentage *
             @as(f64, @floatFromInt(self.bar_width))));
         const empty: usize = self.bar_width - filled;
 
-        writer.writeAll("\x1b[0G\x1b[0K") catch {};
-        writer.writeAll("[") catch {};
-        for (0..filled) |_| writer.writeAll("#") catch {};
-        for (0..empty) |_| writer.writeAll("-") catch {};
-        writer.writeAll("] ") catch {};
-        writer.print("{d:.0}%", .{percentage * 100}) catch {};
-        writer.flush() catch {};
+        stdout.writeAll("\x1b[0G\x1b[0K") catch {};
+        stdout.writeAll("[") catch {};
+        for (0..filled) |_| stdout.writeAll("#") catch {};
+        for (0..empty) |_| stdout.writeAll("-") catch {};
+        stdout.writeAll("] ") catch {};
+        stdout.print("{d:.0}%", .{percentage * 100}) catch {};
+        stdout.flush() catch {};
     }
 
     fn clear_screen(self: *Render) void {
-        self.writer.writeAll("\x1b[2J") catch {};
-        self.writer.flush() catch {};
+        self.stdout.interface.print("\x1b[2J", .{}) catch {};
+        self.stdout.interface.flush() catch {};
     }
 
     fn cursor_hide(self: *Render) void {
-        self.writer.writeAll("\x1b[?25l") catch {};
-        self.writer.flush() catch {};
+        self.stdout.interface.writeAll("\x1b[?25l") catch {};
+        self.stdout.interface.flush() catch {};
     }
 
     fn cursor_show(self: *Render) void {
-        self.writer.writeAll("\x1b[?25h") catch {};
-        self.writer.flush() catch {};
+        self.stdout.interface.writeAll("\x1b[?25h") catch {};
+        self.stdout.interface.flush() catch {};
     }
 };
 
