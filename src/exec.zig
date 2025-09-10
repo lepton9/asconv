@@ -107,27 +107,27 @@ fn fetch_url_content(allocator: std.mem.Allocator, url: []const u8) ![]const u8 
 fn get_input_image(allocator: std.mem.Allocator, filepath: []const u8) ResultImage {
     const input_url = is_url(filepath) catch {
         return ResultImage.wrap_err(
-            result.ErrorWrap.create(ExecError.InvalidUrl, "{s}", .{filepath}),
+            result.ErrorWrap.create(allocator, ExecError.InvalidUrl, "{s}", .{filepath}),
         );
     };
 
     if (input_url) {
         const content = fetch_url_content(allocator, filepath) catch |err| {
             return ResultImage.wrap_err(
-                result.ErrorWrap.create(err, "{s}", .{filepath}),
+                result.ErrorWrap.create(allocator, err, "{s}", .{filepath}),
             );
         };
         defer allocator.free(content);
         const raw_image = image.load_image_from_memory(content) catch {
             return ResultImage.wrap_err(
-                result.ErrorWrap.create(ExecError.FileLoadErrorMem, "", .{}),
+                result.ErrorWrap.create(allocator, ExecError.FileLoadErrorMem, "", .{}),
             );
         };
         return ResultImage.wrap_ok(raw_image);
     } else {
         const raw_image = image.load_image(filepath, null) catch {
             return ResultImage.wrap_err(
-                result.ErrorWrap.create(ExecError.FileLoadError, "{s}", .{filepath}),
+                result.ErrorWrap.create(allocator, ExecError.FileLoadError, "{s}", .{filepath}),
             );
         };
         return ResultImage.wrap_ok(raw_image);
@@ -136,7 +136,7 @@ fn get_input_image(allocator: std.mem.Allocator, filepath: []const u8) ResultIma
 
 fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     const filename = input_file(cli_) catch |err| {
-        return result.ErrorWrap.create(err, "{s}", .{cli_.global_args orelse ""});
+        return result.ErrorWrap.create(allocator, err, "{s}", .{cli_.global_args orelse ""});
     };
     const img = try Image.init(allocator, 0, 0);
     img.core = try corelib.Core.init(allocator);
@@ -171,6 +171,7 @@ fn ascii_video(
     filename: []const u8,
 ) !?result.ErrorWrap {
     if (!enable_video) return result.ErrorWrap.create(
+        allocator,
         ExecError.VideoBuildOptionNotSet,
         "{s}",
         .{"video"},
@@ -232,7 +233,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli, file_type: corelib.MediaT
     defer core.deinit(allocator);
     var timer_total = try time.Timer.start(&core.stats.total);
     const filename = input_file(cli_) catch |err| {
-        return result.ErrorWrap.create(err, "{s}", .{cli_.global_args orelse ""});
+        return result.ErrorWrap.create(allocator, err, "{s}", .{cli_.global_args orelse ""});
     };
     try core.set_ascii_info(allocator, usage.characters);
     switch (file_type) {
@@ -266,7 +267,7 @@ fn ascii_opts(
             if (try config.get_config_from_path(allocator, path)) |c| {
                 break :blk c;
             }
-            return result.ErrorWrap.create(ExecError.NoConfigFound, "{s}", .{path});
+            return result.ErrorWrap.create(allocator, ExecError.NoConfigFound, "{s}", .{path});
         } else break :blk try config.get_config(allocator);
     };
     defer if (conf) |c| c.deinit(allocator);
@@ -275,21 +276,21 @@ fn ascii_opts(
     for (cli_.args.?.items) |*opt| {
         if (std.mem.eql(u8, opt.long_name, "height")) {
             core.height = std.fmt.parseInt(u32, opt.arg.?.value.?, 10) catch {
-                return result.ErrorWrap.create(ExecError.ParseErrorHeight, "{s}", .{opt.arg.?.value.?});
+                return result.ErrorWrap.create(allocator, ExecError.ParseErrorHeight, "{s}", .{opt.arg.?.value.?});
             };
         } else if (std.mem.eql(u8, opt.long_name, "width")) {
             core.width = std.fmt.parseInt(u32, opt.arg.?.value.?, 10) catch {
-                return result.ErrorWrap.create(ExecError.ParseErrorWidth, "{s}", .{opt.arg.?.value.?});
+                return result.ErrorWrap.create(allocator, ExecError.ParseErrorWidth, "{s}", .{opt.arg.?.value.?});
             };
         } else if (std.mem.eql(u8, opt.long_name, "scale")) {
             core.scale = std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {
-                return result.ErrorWrap.create(ExecError.ParseErrorScale, "{s}", .{opt.arg.?.value.?});
+                return result.ErrorWrap.create(allocator, ExecError.ParseErrorScale, "{s}", .{opt.arg.?.value.?});
             };
         } else if (std.mem.eql(u8, opt.long_name, "fit")) {
             core.fit_screen = true;
         } else if (std.mem.eql(u8, opt.long_name, "brightness")) {
             core.brightness = std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {
-                return result.ErrorWrap.create(ExecError.ParseErrorBrightness, "{s}", .{opt.arg.?.value.?});
+                return result.ErrorWrap.create(allocator, ExecError.ParseErrorBrightness, "{s}", .{opt.arg.?.value.?});
             };
         } else if (std.mem.eql(u8, opt.long_name, "reverse")) {
             try core.ascii_info.reverse(allocator);
@@ -299,30 +300,31 @@ fn ascii_opts(
             core.toggle_color();
             if (opt.arg.?.value) |val| {
                 core.set_color_mode(val) catch {
-                    return result.ErrorWrap.create(ExecError.NoColorModeFound, "{s}", .{val});
+                    return result.ErrorWrap.create(allocator, ExecError.NoColorModeFound, "{s}", .{val});
                 };
             }
         } else if (std.mem.eql(u8, opt.long_name, "edges")) {
             core.edge_detection = true;
             if (opt.arg.?.value) |val| {
                 core.set_edge_alg(val) catch {
-                    return result.ErrorWrap.create(ExecError.NoAlgorithmFound, "{s}", .{val});
+                    return result.ErrorWrap.create(allocator, ExecError.NoAlgorithmFound, "{s}", .{val});
                 };
             }
         } else if (std.mem.eql(u8, opt.long_name, "sigma")) {
             core.set_sigma(
                 std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {
-                    return result.ErrorWrap.create(ExecError.ParseErrorSigma, "{s}", .{opt.arg.?.value.?});
+                    return result.ErrorWrap.create(allocator, ExecError.ParseErrorSigma, "{s}", .{opt.arg.?.value.?});
                 },
             );
         } else if (std.mem.eql(u8, opt.long_name, "ccharset")) {
             if (conf) |c| {
                 const charsets = c.table.get_table().get("charsets");
                 if (charsets == null or charsets.? != .table)
-                    return result.ErrorWrap.create(ExecError.NoConfigTable, "charsets", .{});
+                    return result.ErrorWrap.create(allocator, ExecError.NoConfigTable, "charsets", .{});
                 const cs = charsets.?.get(opt.arg.?.value.?);
                 if (cs == null or cs.? != .string)
                     return result.ErrorWrap.create(
+                        allocator,
                         ExecError.NoConfigCharset,
                         "{s}",
                         .{opt.arg.?.value.?},
@@ -330,6 +332,7 @@ fn ascii_opts(
                 try core.set_ascii_info(allocator, cs.?.string);
             } else {
                 return result.ErrorWrap.create(
+                    allocator,
                     ExecError.NoConfigFound,
                     "{s}",
                     .{config_path orelse "default_path"},

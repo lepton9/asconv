@@ -5,9 +5,10 @@ const cli = @import("cli");
 const cmd = cli.cmd;
 const arg = cli.arg;
 
-fn handle_cli(cli_result: cli.ResultCli) ?*cli.Cli {
+fn handle_cli(allocator: std.mem.Allocator, cli_result: cli.ResultCli) ?*cli.Cli {
     return cli_result.unwrap_try() catch {
         const err = cli_result.unwrap_err();
+        defer err.deinit(allocator);
         switch (err.err) {
             cli.ArgsError.UnknownCommand => {
                 std.log.err("Unknown command: '{s}'", .{err.get_ctx()});
@@ -44,7 +45,8 @@ fn handle_cli(cli_result: cli.ResultCli) ?*cli.Cli {
     };
 }
 
-fn handle_exec_error(err: result.ErrorWrap) void {
+fn handle_exec_error(allocator: std.mem.Allocator, err: result.ErrorWrap) void {
+    defer err.deinit(allocator);
     switch (err.err) {
         exec.ExecError.NoFileName => {
             std.log.err("No file given as argument", .{});
@@ -125,9 +127,9 @@ pub fn main() !void {
     defer alloc.free(args);
 
     const cli_result = try cli.validate_parsed_args(alloc, args, &app);
-    var cli_ = handle_cli(cli_result) orelse return;
+    var cli_ = handle_cli(alloc, cli_result) orelse return;
     defer cli_.deinit(alloc);
 
     const err = try exec.cmd_func(alloc, cli_, &app);
-    if (err) |e| handle_exec_error(e);
+    if (err) |e| handle_exec_error(alloc, e);
 }
