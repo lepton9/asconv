@@ -449,7 +449,7 @@ pub fn cmd_func(allocator: std.mem.Allocator, cli_: *cli.Cli, args_struct: *cons
         std.log.info("No command", .{});
         return null;
     }
-    const cmd_name = cli_.cmd.?.name.?;
+    const cmd_name = cli_.cmd.?.name;
     if (std.mem.eql(u8, cmd_name, "size")) {
         return try size(allocator, cli_);
     } else if (std.mem.eql(u8, cmd_name, "ascii")) {

@@ -176,7 +176,7 @@ fn validate_commands(comptime cmds: []const Cmd) void {
     const std = @import("std");
     inline for (cmds, 0..) |cmd_i, i| {
         inline for (cmds[(i + 1)..]) |cmd_j| {
-            if (std.mem.eql(u8, cmd_i.name.?, cmd_j.name.?)) {
+            if (std.mem.eql(u8, cmd_i.name, cmd_j.name)) {
                 @compileError("Duplicate command name: " ++ cmd_i.name.?);
             }
         }
