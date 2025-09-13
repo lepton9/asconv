@@ -1,4 +1,5 @@
 const std = @import("std");
+const cwd = std.fs.cwd();
 const av = @import("av");
 const corelib = @import("core");
 
@@ -33,13 +34,20 @@ const Render = struct {
         allocator.destroy(self);
     }
 
-    pub fn set_output(self: *Render, output: ?[]const u8) void {
+    fn set_output(self: *Render, output: ?[]const u8) !void {
         self.output_path = output;
-        if (output) |_| {
+        if (output) |out| {
             self.mode = .Dump;
+            try cwd.makePath(out);
         } else {
             self.mode = .Realtime;
+            self.clear_screen();
+            self.cursor_hide();
         }
+    }
+
+    fn cleanup(self: *Render) void {
+        if (self.mode == .Realtime) self.cursor_show();
     }
 
     fn handle_frame(
@@ -81,7 +89,7 @@ const Render = struct {
         const path = try std.fs.path.join(allocator, &.{ self.output_path.?, filename });
         defer allocator.free(path);
 
-        var file = try std.fs.cwd().createFile(path, .{});
+        var file = try cwd.createFile(path, .{});
         defer file.close();
         try file.writeAll(frame);
     }
@@ -157,7 +165,7 @@ pub const Video = struct {
         self.allocator.destroy(self);
     }
 
-    pub fn set_edge_detection(self: *Video) !void {
+    fn set_edge_detection(self: *Video) !void {
         if (self.edges) |edges| {
             edges.deinit(self.allocator);
         }
@@ -170,7 +178,7 @@ pub const Video = struct {
         );
     }
 
-    pub fn set_target_fps(self: *Video, fps: f64) void {
+    fn set_target_fps(self: *Video, fps: f64) void {
         self.fps = fps;
         self.frame_ns = @intFromFloat(std.time.ns_per_s / fps);
         self.core.stats.fps = 0;
@@ -203,7 +211,7 @@ pub const Video = struct {
         }
     }
 
-    pub fn frame_to_ascii(self: *Video) ![]const u8 {
+    fn frame_to_ascii(self: *Video) ![]const u8 {
         var timer = try corelib.time.Timer.start_add(&self.core.stats.converting);
         defer timer.stop();
         self.frame_ascii_buffer.clearRetainingCapacity();
@@ -277,14 +285,8 @@ pub fn process_video(
 
     var render = try Render.init(allocator, height, width);
     defer render.deinit(allocator);
-    render.set_output(output);
-    if (render.mode == .Realtime) {
-        render.clear_screen();
-        render.cursor_hide();
-    }
-    defer {
-        if (render.mode == .Realtime) render.cursor_show();
-    }
+    try render.set_output(output);
+    defer render.cleanup();
 
     const stream: *av.Stream = fmt_ctx.*.streams[video_stream_index];
     const target_fps = @as(f64, @floatFromInt(stream.*.avg_frame_rate.num)) /
