@@ -125,7 +125,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     video_mod.addImport("av", av_mod);
-    linkFfmpeg(b, target, av_mod);
+    if (enable_video) {
+        linkFfmpeg(b, target, av_mod);
+    }
 
     // Toml
     const toml = b.dependency("toml", .{ .target = target, .optimize = optimize });
