@@ -5,6 +5,7 @@ const cmd = cli.cmd;
 const arg = cli.arg;
 
 const test_input = "https://cdn.7tv.app/emote/01GXHWC0QG000BFY6BHVKSSEXW/4x.gif";
+const output = "test_output";
 
 const app = cmd.ArgsStructure{
     .commands = &exec.commands,
@@ -13,9 +14,12 @@ const app = cmd.ArgsStructure{
 
 test "video" {
     const alloc = std.testing.allocator;
+    const cwd = std.fs.cwd();
+    try cwd.makePath(output);
+
     var args = try std.ArrayList(arg.ArgParse).initCapacity(alloc, 5);
     try args.append(alloc, .{ .value = "asciivid" });
-    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = "output" } });
+    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = output } });
     try args.append(alloc, .{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
     try args.append(alloc, .{ .value = test_input });
     defer args.deinit(alloc);
@@ -28,4 +32,5 @@ test "video" {
             std.debug.print("Error: {}\n", .{err.err});
         }
     }
+    try cwd.deleteTree(output);
 }
