@@ -111,7 +111,7 @@ fn handle_exec_error(allocator: std.mem.Allocator, err: result.ErrorWrap) void {
     }
 }
 
-pub fn main() !void {
+pub fn main() !u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var alloc = gpa.allocator();
 
@@ -127,9 +127,13 @@ pub fn main() !void {
     defer alloc.free(args);
 
     const cli_result = try cli.validate_parsed_args(alloc, args, &app);
-    var cli_ = handle_cli(alloc, cli_result) orelse return;
+    var cli_ = handle_cli(alloc, cli_result) orelse return 1;
     defer cli_.deinit(alloc);
 
     const err = try exec.cmd_func(alloc, cli_, &app);
-    if (err) |e| handle_exec_error(alloc, e);
+    if (err) |e| {
+        handle_exec_error(alloc, e);
+        return 1;
+    }
+    return 0;
 }
