@@ -8,14 +8,21 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
     const CFlags = &[_][]const u8{"-fPIC"};
+    const options = b.addOptions();
 
     const enable_video = b.option(
         bool,
         "video",
         "Enables video support and requires Ffmpeg libraries",
     ) orelse false;
-    const options = b.addOptions();
     options.addOption(bool, "video", enable_video);
+
+    const ffmpeg_dir = b.option(
+        []const u8,
+        "ffmpeg",
+        "Set path to ffmpeg libraries",
+    );
+    options.addOption(bool, "ffmpeg", enable_video);
 
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
@@ -126,7 +133,7 @@ pub fn build(b: *std.Build) void {
     });
     video_mod.addImport("av", av_mod);
     if (enable_video) {
-        linkFfmpeg(b, target, av_mod);
+        linkFfmpeg(b, target, av_mod, ffmpeg_dir);
     }
 
     // Toml
@@ -169,28 +176,40 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_test_cmd.step);
 }
 
-fn linkFfmpeg(b: *std.Build, target: std.Build.ResolvedTarget, lib: *std.Build.Module) void {
+fn linkFfmpeg(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    lib: *std.Build.Module,
+    ffmpeg_dir: ?[]const u8,
+) void {
     switch (target.result.os.tag) {
         .windows => {
-            const base_dir = "C:/ProgramData/chocolatey/lib/ffmpeg-shared/tools";
+            const ffmpeg_root_maybe: ?[]const u8 = blk: {
+                if (ffmpeg_dir) |ffmpeg_d| {
+                    break :blk std.fmt.allocPrint(b.allocator, "{s}", .{ffmpeg_d}) catch return;
+                } else {
+                    const base_dir = "C:/ProgramData/chocolatey/lib/ffmpeg-shared/tools";
+                    var dir = std.fs.openDirAbsolute(base_dir, .{ .iterate = true }) catch |err| {
+                        std.debug.print("Couldn't open ffmpeg base dir {s}: {}\n", .{ base_dir, err });
+                        return;
+                    };
+                    defer dir.close();
 
-            var dir = std.fs.openDirAbsolute(base_dir, .{ .iterate = true }) catch |err| {
-                std.debug.print("Couldn't open ffmpeg base dir {s}: {}", .{ base_dir, err });
-                return;
-            };
-            defer dir.close();
-
-            var found_dir: ?[]const u8 = null;
-            var it = dir.iterate();
-            while (it.next() catch null) |entry| {
-                if (entry.kind == .directory and std.mem.startsWith(u8, entry.name, "ffmpeg")) {
-                    // Check latest version
-                    found_dir = entry.name;
-                    break;
+                    var found_dir: ?[]const u8 = null;
+                    var it = dir.iterate();
+                    while (it.next() catch null) |entry| {
+                        if (entry.kind == .directory and std.mem.startsWith(u8, entry.name, "ffmpeg")) {
+                            found_dir = entry.name;
+                            break;
+                        }
+                    }
+                    if (found_dir) |d|
+                        break :blk std.fmt.allocPrint(b.allocator, "{s}/{s}", .{ base_dir, d }) catch return;
+                    break :blk null;
                 }
-            }
-            if (found_dir) |sub_dir| {
-                const ffmpeg_root = std.fmt.allocPrint(b.allocator, "{s}/{s}", .{ base_dir, sub_dir }) catch return;
+            };
+
+            if (ffmpeg_root_maybe) |ffmpeg_root| {
                 defer b.allocator.free(ffmpeg_root);
 
                 const ffmpeg_lib_dir = std.fs.path.join(b.allocator, &.{ ffmpeg_root, "lib" }) catch return;
@@ -216,7 +235,7 @@ fn linkFfmpeg(b: *std.Build, target: std.Build.ResolvedTarget, lib: *std.Build.M
                 }
 
                 var bin_dir = std.fs.openDirAbsolute(ffmpeg_bin_dir, .{ .iterate = true }) catch |err| {
-                    std.debug.print("Couldn't open ffmpeg bin dir {s}: {}", .{ ffmpeg_bin_dir, err });
+                    std.debug.print("Couldn't open ffmpeg bin dir {s}: {}\n", .{ ffmpeg_bin_dir, err });
                     return;
                 };
                 defer bin_dir.close();
