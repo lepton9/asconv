@@ -1,5 +1,4 @@
 const std = @import("std");
-const cwd = std.fs.cwd();
 const av = @import("av");
 const corelib = @import("core");
 
@@ -38,7 +37,7 @@ const Render = struct {
         self.output_path = output;
         if (output) |out| {
             self.mode = .Dump;
-            try cwd.makePath(out);
+            try std.fs.cwd().makePath(out);
         } else {
             self.mode = .Realtime;
             self.clear_screen();
@@ -89,7 +88,7 @@ const Render = struct {
         const path = try std.fs.path.join(allocator, &.{ self.output_path.?, filename });
         defer allocator.free(path);
 
-        var file = try cwd.createFile(path, .{});
+        var file = try std.fs.cwd().createFile(path, .{});
         defer file.close();
         try file.writeAll(frame);
     }
