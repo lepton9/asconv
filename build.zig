@@ -172,12 +172,75 @@ pub fn build(b: *std.Build) void {
 fn linkFfmpeg(b: *std.Build, target: std.Build.ResolvedTarget, lib: *std.Build.Module) void {
     switch (target.result.os.tag) {
         .windows => {
-            lib.addLibraryPath(b.path("C:/ffmpeg/lib"));
-            lib.addIncludePath(b.path("C:/ffmpeg/include"));
-            lib.linkSystemLibrary("avformat", .{});
-            lib.linkSystemLibrary("avcodec", .{});
-            lib.linkSystemLibrary("swscale", .{});
-            lib.linkSystemLibrary("avutil", .{ .use_pkg_config = .force });
+            const base_dir = "C:/ProgramData/chocolatey/lib/ffmpeg-shared/tools";
+
+            var dir = std.fs.openDirAbsolute(base_dir, .{ .iterate = true }) catch |err| {
+                std.debug.print("Couldn't open ffmpeg base dir {s}: {}", .{ base_dir, err });
+                return;
+            };
+            defer dir.close();
+
+            var found_dir: ?[]const u8 = null;
+            var it = dir.iterate();
+            while (it.next() catch null) |entry| {
+                if (entry.kind == .directory and std.mem.startsWith(u8, entry.name, "ffmpeg")) {
+                    // Check latest version
+                    found_dir = entry.name;
+                    break;
+                }
+            }
+            if (found_dir) |sub_dir| {
+                const ffmpeg_root = std.fmt.allocPrint(b.allocator, "{s}/{s}", .{ base_dir, sub_dir }) catch return;
+                defer b.allocator.free(ffmpeg_root);
+
+                const ffmpeg_lib_dir = std.fs.path.join(b.allocator, &.{ ffmpeg_root, "lib" }) catch return;
+                const ffmpeg_include_dir = std.fs.path.join(b.allocator, &.{ ffmpeg_root, "include" }) catch return;
+                const ffmpeg_bin_dir = std.fs.path.join(b.allocator, &.{ ffmpeg_root, "bin" }) catch return;
+                defer b.allocator.free(ffmpeg_lib_dir);
+                defer b.allocator.free(ffmpeg_include_dir);
+                defer b.allocator.free(ffmpeg_bin_dir);
+
+                lib.addLibraryPath(.{ .cwd_relative = ffmpeg_lib_dir });
+                lib.addIncludePath(.{ .cwd_relative = ffmpeg_include_dir });
+
+                const libs = [_][]const u8{
+                    "avcodec",
+                    "avformat",
+                    "avutil",
+                    "swscale",
+                    "swresample",
+                };
+
+                for (libs) |lib_name| {
+                    lib.linkSystemLibrary(lib_name, .{});
+                }
+
+                var bin_dir = std.fs.openDirAbsolute(ffmpeg_bin_dir, .{ .iterate = true }) catch |err| {
+                    std.debug.print("Couldn't open ffmpeg bin dir {s}: {}", .{ ffmpeg_bin_dir, err });
+                    return;
+                };
+                defer bin_dir.close();
+
+                var iter = bin_dir.iterate();
+                while (iter.next() catch null) |entry| {
+                    if (entry.kind != .file) continue;
+                    for (libs) |lib_name| {
+                        if (std.mem.startsWith(u8, entry.name, lib_name) and
+                            std.mem.endsWith(u8, entry.name, ".dll"))
+                        {
+                            var dll_path_buf: [std.fs.max_path_bytes]u8 = undefined;
+                            const dll_path = std.fmt.bufPrint(
+                                &dll_path_buf,
+                                "{s}/{s}",
+                                .{ ffmpeg_bin_dir, entry.name },
+                            ) catch return;
+                            b.getInstallStep().dependOn(
+                                &b.addInstallBinFile(.{ .cwd_relative = dll_path }, entry.name).step,
+                            );
+                        }
+                    }
+                }
+            }
         },
         else => {
             lib.linkSystemLibrary("libavformat", .{ .use_pkg_config = .force });
