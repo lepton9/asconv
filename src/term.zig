@@ -44,3 +44,58 @@ fn term_size_windows() !TermSize {
         .width = @intCast(info.srWindow.Right - info.srWindow.Left),
     };
 }
+
+pub const TermRenderer = struct {
+    stdout: std.fs.File.Writer,
+
+    pub fn init(allocator: std.mem.Allocator) !*TermRenderer {
+        const render = try allocator.create(TermRenderer);
+        var buf: [4096]u8 = undefined;
+        const stdout = std.fs.File.stdout().writer(&buf);
+        render.* = .{
+            .stdout = stdout,
+        };
+        return render;
+    }
+
+    pub fn deinit(self: *TermRenderer, allocator: std.mem.Allocator) void {
+        allocator.destroy(self);
+    }
+
+    pub fn write_escaped(self: *TermRenderer, esc_seq: []const u8, buf: []const u8) !void {
+        try self.stdout.interface.writeAll(esc_seq);
+        try self.writef(buf);
+    }
+
+    pub fn write(self: *TermRenderer, buf: []const u8) !void {
+        try self.stdout.interface.writeAll(buf);
+    }
+
+    pub fn writef(self: *TermRenderer, buf: []const u8) !void {
+        try self.write(buf);
+        try self.stdout.interface.flush();
+    }
+
+    pub fn print(self: *TermRenderer, comptime fmt: []const u8, args: anytype) !void {
+        try self.stdout.interface.print(fmt, args);
+    }
+
+    pub fn flush(self: *TermRenderer) !void {
+        try self.stdout.interface.flush();
+    }
+
+    pub fn clear_screen(self: *TermRenderer) void {
+        self.stdout.interface.print("\x1b[2J", .{}) catch {};
+        self.stdout.interface.flush() catch {};
+    }
+
+    pub fn cursor_hide(self: *TermRenderer) void {
+        self.stdout.interface.writeAll("\x1b[?25l") catch {};
+        self.stdout.interface.flush() catch {};
+    }
+
+    pub fn cursor_show(self: *TermRenderer) void {
+        self.stdout.interface.writeAll("\x1b[?25h") catch {};
+        self.stdout.interface.flush() catch {};
+    }
+};

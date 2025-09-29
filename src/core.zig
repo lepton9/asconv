@@ -1,6 +1,6 @@
 const std = @import("std");
 pub const time = @import("time.zig");
-const term = @import("term.zig");
+const term = @import("term");
 const utils = @import("utils");
 const itof = utils.itof;
 const ftoi = utils.ftoi;

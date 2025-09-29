@@ -1,6 +1,7 @@
 const std = @import("std");
 const av = @import("av");
 const corelib = @import("core");
+const term = @import("term");
 
 pub const OutputMode = enum {
     Realtime,
@@ -15,12 +16,11 @@ const Render = struct {
     bar_width: usize = 40,
     mode: OutputMode = .Realtime,
     output_path: ?[]const u8 = null,
-    stdout: std.fs.File.Writer,
+    stdout: *term.TermRenderer,
 
     fn init(allocator: std.mem.Allocator, height: usize, width: usize) !*Render {
         const render = try allocator.create(Render);
-        var buf: [4096]u8 = undefined;
-        const stdout = std.fs.File.stdout().writer(&buf);
+        const stdout = try term.TermRenderer.init(allocator);
         render.* = .{
             .width = width,
             .height = height,
@@ -30,6 +30,7 @@ const Render = struct {
     }
 
     fn deinit(self: *Render, allocator: std.mem.Allocator) void {
+        self.stdout.deinit(allocator);
         allocator.destroy(self);
     }
 
@@ -40,13 +41,13 @@ const Render = struct {
             try std.fs.cwd().makePath(out);
         } else {
             self.mode = .Realtime;
-            self.clear_screen();
-            self.cursor_hide();
+            self.stdout.clear_screen();
+            self.stdout.cursor_hide();
         }
     }
 
     fn cleanup(self: *Render) void {
-        if (self.mode == .Realtime) self.cursor_show();
+        if (self.mode == .Realtime) self.stdout.cursor_show();
     }
 
     fn handle_frame(
@@ -67,9 +68,7 @@ const Render = struct {
     }
 
     fn print_frame(self: *Render, frame: []const u8) !void {
-        try self.stdout.interface.writeAll("\x1b[H");
-        try self.stdout.interface.writeAll(frame);
-        try self.stdout.interface.flush();
+        try self.stdout.write_escaped("\x1b[H", frame);
     }
 
     fn dump_frame(
@@ -95,35 +94,20 @@ const Render = struct {
 
     fn print_progress(self: *Render, frame_no: usize) void {
         if (self.frames_total == 0) return;
-        var stdout = self.stdout.interface;
+        var stdout = self.stdout;
         const percentage: f64 = @as(f64, @floatFromInt(frame_no)) /
             @as(f64, @floatFromInt(self.frames_total));
         const filled: usize = @intFromFloat(@ceil(percentage *
             @as(f64, @floatFromInt(self.bar_width))));
         const empty: usize = self.bar_width - filled;
 
-        stdout.writeAll("\x1b[0G\x1b[0K") catch {};
-        stdout.writeAll("[") catch {};
-        for (0..filled) |_| stdout.writeAll("#") catch {};
-        for (0..empty) |_| stdout.writeAll("-") catch {};
-        stdout.writeAll("] ") catch {};
+        stdout.write("\x1b[0G\x1b[0K") catch {};
+        stdout.write("[") catch {};
+        for (0..filled) |_| stdout.write("#") catch {};
+        for (0..empty) |_| stdout.write("-") catch {};
+        stdout.write("] ") catch {};
         stdout.print("{d:.0}%", .{percentage * 100}) catch {};
         stdout.flush() catch {};
-    }
-
-    fn clear_screen(self: *Render) void {
-        self.stdout.interface.print("\x1b[2J", .{}) catch {};
-        self.stdout.interface.flush() catch {};
-    }
-
-    fn cursor_hide(self: *Render) void {
-        self.stdout.interface.writeAll("\x1b[?25l") catch {};
-        self.stdout.interface.flush() catch {};
-    }
-
-    fn cursor_show(self: *Render) void {
-        self.stdout.interface.writeAll("\x1b[?25h") catch {};
-        self.stdout.interface.flush() catch {};
     }
 };
 

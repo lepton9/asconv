@@ -91,6 +91,14 @@ pub fn build(b: *std.Build) void {
     exec_mod.addImport("video", video_mod);
     video_mod.addImport("core", core_mod);
 
+    const term_mod = b.addModule("term", .{
+        .root_source_file = b.path("src/term.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    core_mod.addImport("term", term_mod);
+    video_mod.addImport("term", term_mod);
+
     // Result
     const result_mod = b.createModule(.{
         .root_source_file = b.path("src/result.zig"),
