@@ -68,7 +68,7 @@ const Render = struct {
     }
 
     fn print_frame(self: *Render, frame: []const u8) !void {
-        try self.stdout.write_escaped("\x1b[H", frame);
+        try self.stdout.printf("\x1b[H{s}", .{frame});
     }
 
     fn dump_frame(
