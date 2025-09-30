@@ -139,6 +139,13 @@ pub const options = [_]Option{
         .arg = .{ .name = "key" },
     },
     .{
+        .long_name = "fps",
+        .short_name = null,
+        .desc = "Set target FPS for video (default: 30)",
+        .required = false,
+        .arg = .{ .name = "float" },
+    },
+    .{
         .long_name = "progress",
         .short_name = "p",
         .desc = "Display the progress of converting video to ASCII",

@@ -272,7 +272,7 @@ pub fn process_video(
     defer render.cleanup();
 
     const stream: *av.Stream = fmt_ctx.*.streams[video_stream_index];
-    const target_fps = @as(f64, @floatFromInt(stream.*.avg_frame_rate.num)) /
+    const target_fps = core.fps orelse @as(f64, @floatFromInt(stream.*.avg_frame_rate.num)) /
         @as(f64, @floatFromInt(stream.*.avg_frame_rate.den));
     video.set_target_fps(target_fps);
     render.frames_total = total_frames(stream);

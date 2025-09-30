@@ -48,9 +48,6 @@ fn handle_cli(allocator: std.mem.Allocator, cli_result: cli.ResultCli) ?*cli.Cli
 fn handle_exec_error(allocator: std.mem.Allocator, err: result.ErrorWrap) void {
     defer err.deinit(allocator);
     switch (err.err) {
-        exec.ExecError.NoFileName => {
-            std.log.err("No file given as argument", .{});
-        },
         exec.ExecError.FileLoadError => {
             std.log.err("Failed to load image '{s}'", .{err.get_ctx()});
         },
@@ -72,11 +69,17 @@ fn handle_exec_error(allocator: std.mem.Allocator, err: result.ErrorWrap) void {
         exec.ExecError.ParseErrorSigma => {
             std.log.err("Failed to parse sigma '{s}'", .{err.get_ctx()});
         },
+        exec.ExecError.ParseErrorFps => {
+            std.log.err("Failed to parse FPS '{s}'", .{err.get_ctx()});
+        },
         exec.ExecError.DuplicateInput => {
             std.log.err("Multiple input files '{s}'", .{err.get_ctx()});
         },
-        exec.ExecError.NoInputFile => {
-            std.log.err("No input file given", .{});
+        exec.ExecError.NoInput => {
+            std.log.err("No input given", .{});
+        },
+        exec.ExecError.InvalidInput => {
+            std.log.err("Invalid input '{s}'", .{err.get_ctx()});
         },
         exec.ExecError.NoAlgorithmFound => {
             std.log.err("No edge detection algorithm '{s}'", .{err.get_ctx()});

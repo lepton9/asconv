@@ -7,6 +7,7 @@ const image = @import("img");
 const utils = @import("utils");
 const usage = @import("usage");
 const config = @import("config");
+const term = @import("term");
 const time = corelib.time;
 const Image = image.Image;
 const ImageRaw = image.ImageRaw;
@@ -20,7 +21,6 @@ pub const options = usage.options;
 pub const ResultImage = result.Result(ImageRaw, result.ErrorWrap);
 
 pub const ExecError = error{
-    NoFileName,
     FileLoadError,
     FileLoadErrorMem,
     ParseErrorHeight,
@@ -28,8 +28,10 @@ pub const ExecError = error{
     ParseErrorScale,
     ParseErrorBrightness,
     ParseErrorSigma,
+    ParseErrorFps,
     DuplicateInput,
-    NoInputFile,
+    NoInput,
+    InvalidInput,
     NoAlgorithmFound,
     NoColorModeFound,
     NoConfigFound,
@@ -40,7 +42,7 @@ pub const ExecError = error{
     VideoBuildOptionNotSet,
 };
 
-fn input_file(cli_: *cli.Cli) ![]const u8 {
+fn get_input(cli_: *cli.Cli) ![]const u8 {
     var input: ?[]const u8 = null;
     if (cli_.find_opt("input")) |opt_input| {
         input = opt_input.arg.?.value;
@@ -49,7 +51,7 @@ fn input_file(cli_: *cli.Cli) ![]const u8 {
         if (input) |_| return ExecError.DuplicateInput;
         input = ga;
     }
-    return input orelse ExecError.NoInputFile;
+    return input orelse ExecError.NoInput;
 }
 
 fn output_path(cli_: *cli.Cli) ?[]const u8 {
@@ -135,7 +137,7 @@ fn get_input_image(allocator: std.mem.Allocator, filepath: []const u8) ResultIma
 }
 
 fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
-    const filename = input_file(cli_) catch |err| {
+    const filename = get_input(cli_) catch |err| {
         return result.ErrorWrap.create(allocator, err, "{s}", .{cli_.global_args orelse ""});
     };
     const img = try Image.init(allocator, 0, 0);
@@ -232,7 +234,7 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli, file_type: corelib.MediaT
     var core = try corelib.Core.init(allocator);
     defer core.deinit(allocator);
     var timer_total = try time.Timer.start(&core.stats.total);
-    const filename = input_file(cli_) catch |err| {
+    const filename = get_input(cli_) catch |err| {
         return result.ErrorWrap.create(allocator, err, "{s}", .{cli_.global_args orelse ""});
     };
     try core.set_ascii_info(allocator, usage.characters);
@@ -291,6 +293,10 @@ fn ascii_opts(
         } else if (std.mem.eql(u8, opt.long_name, "brightness")) {
             core.brightness = std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {
                 return result.ErrorWrap.create(allocator, ExecError.ParseErrorBrightness, "{s}", .{opt.arg.?.value.?});
+            };
+        } else if (std.mem.eql(u8, opt.long_name, "fps")) {
+            core.fps = std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {
+                return result.ErrorWrap.create(allocator, ExecError.ParseErrorFps, "{s}", .{opt.arg.?.value.?});
             };
         } else if (std.mem.eql(u8, opt.long_name, "reverse")) {
             try core.ascii_info.reverse(allocator);

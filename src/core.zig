@@ -139,6 +139,7 @@ pub const Core = struct {
     sigma2: f32,
     stats: time.Stats,
     drop_frames: bool = false,
+    fps: ?f32 = null,
 
     pub fn init(allocator: std.mem.Allocator) !*Core {
         const core = try allocator.create(Core);
