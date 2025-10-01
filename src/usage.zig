@@ -141,9 +141,16 @@ pub const options = [_]Option{
     .{
         .long_name = "fps",
         .short_name = null,
-        .desc = "Set target FPS for video (default: 30)",
+        .desc = "Set target FPS for video",
         .required = false,
         .arg = .{ .name = "float" },
+    },
+    .{
+        .long_name = "loop",
+        .short_name = "l",
+        .desc = "Loop the video",
+        .required = false,
+        .arg = null,
     },
     .{
         .long_name = "progress",

@@ -298,6 +298,8 @@ fn ascii_opts(
             core.fps = std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {
                 return result.ErrorWrap.create(allocator, ExecError.ParseErrorFps, "{s}", .{opt.arg.?.value.?});
             };
+        } else if (std.mem.eql(u8, opt.long_name, "loop")) {
+            core.loop = true;
         } else if (std.mem.eql(u8, opt.long_name, "reverse")) {
             try core.ascii_info.reverse(allocator);
         } else if (std.mem.eql(u8, opt.long_name, "charset")) {

@@ -140,6 +140,7 @@ pub const Core = struct {
     stats: time.Stats,
     drop_frames: bool = false,
     fps: ?f32 = null,
+    loop: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) !*Core {
         const core = try allocator.create(Core);
