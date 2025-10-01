@@ -16,6 +16,11 @@ pub const commands = [_]Cmd{
         .options = null,
     },
     .{
+        .name = "playback",
+        .desc = "Play converted ascii video",
+        .options = null,
+    },
+    .{
         .name = "size",
         .desc = "Show size of the image",
         .options = null,

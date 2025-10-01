@@ -166,6 +166,67 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     return null;
 }
 
+fn playback(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
+    const input_dir = get_input(cli_) catch |err| {
+        return result.ErrorWrap.create(allocator, err, "{s}", .{cli_.global_args orelse ""});
+    };
+    const cwd = std.fs.cwd();
+
+    const dir = cwd.openDir(input_dir, .{ .iterate = true }) catch {
+        return result.ErrorWrap.create(allocator, ExecError.InvalidInput, "{s}", .{input_dir});
+    };
+
+    var core = try corelib.Core.init(allocator);
+    defer core.deinit(allocator);
+    if (try ascii_opts(allocator, cli_, core)) |err| {
+        return err;
+    }
+
+    var frame_n: usize = 0;
+    const render = try term.TermRenderer.init(allocator);
+    defer render.deinit(allocator);
+
+    const fps: f32 = core.fps orelse 30.0;
+    const loop: bool = core.loop;
+
+    var it = dir.iterate();
+    var buffer: []u8 = undefined;
+    defer allocator.free(buffer);
+
+    while (it.next() catch null) |entry| {
+        if (entry.kind != .file) continue;
+        if (!std.mem.startsWith(u8, entry.name, "frame_")) continue;
+        buffer = try dir.readFileAlloc(entry.name, allocator, std.Io.Limit.unlimited);
+        it.reset();
+        break;
+    }
+
+    render.clear_screen();
+    render.cursor_hide();
+    defer render.cursor_show();
+
+    while (true) {
+        while (it.next() catch null) |entry| {
+            if (entry.kind != .file) continue;
+            if (!std.mem.startsWith(u8, entry.name, "frame_")) continue;
+
+            const file_content = try dir.readFile(entry.name, buffer);
+            try render.write("\x1b[H");
+            try render.writef(file_content);
+
+            const ns: u64 = @intFromFloat(
+                @divTrunc(@as(f64, @floatFromInt(1_000_000_000)), @as(f64, fps)),
+            );
+            std.Thread.sleep(ns);
+            frame_n += 1;
+        }
+        if (!loop) break;
+        it.reset();
+    }
+
+    return null;
+}
+
 fn ascii_video(
     allocator: std.mem.Allocator,
     cli_: *cli.Cli,
@@ -464,6 +525,8 @@ pub fn cmd_func(allocator: std.mem.Allocator, cli_: *cli.Cli, args_struct: *cons
         return try ascii(allocator, cli_, .Image);
     } else if (std.mem.eql(u8, cmd_name, "asciivid")) {
         return try ascii(allocator, cli_, .Video);
+    } else if (std.mem.eql(u8, cmd_name, "playback")) {
+        return try playback(allocator, cli_);
     } else if (std.mem.eql(u8, cmd_name, "compress")) {
         return null;
     } else if (std.mem.eql(u8, cmd_name, "help")) {

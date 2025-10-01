@@ -98,6 +98,7 @@ pub fn build(b: *std.Build) void {
     });
     core_mod.addImport("term", term_mod);
     video_mod.addImport("term", term_mod);
+    exec_mod.addImport("term", term_mod);
 
     // Result
     const result_mod = b.createModule(.{
