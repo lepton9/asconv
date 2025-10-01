@@ -105,9 +105,8 @@ const Render = struct {
         stdout.write("[") catch {};
         for (0..filled) |_| stdout.write("#") catch {};
         for (0..empty) |_| stdout.write("-") catch {};
-        stdout.write("] ") catch {};
-        stdout.print("{d:.0}%", .{percentage * 100}) catch {};
-        stdout.flush() catch {};
+        stdout.writef("] ") catch {};
+        stdout.printf("{d:.0}%", .{percentage * 100}) catch {};
     }
 };
 
