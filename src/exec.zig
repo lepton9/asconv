@@ -8,6 +8,7 @@ const utils = @import("utils");
 const usage = @import("usage");
 const config = @import("config");
 const term = @import("term");
+const Input = @import("input").Input;
 const time = corelib.time;
 const Image = image.Image;
 const ImageRaw = image.ImageRaw;
@@ -186,8 +187,17 @@ fn playback(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     const render = try term.TermRenderer.init(allocator);
     defer render.deinit(allocator);
 
+    var input_handler = try Input.init(allocator, true);
+    defer input_handler.deinit();
+    const input_thread = try std.Thread.spawn(
+        .{ .allocator = allocator },
+        Input.run,
+        .{input_handler},
+    );
+
     const fps: f32 = core.fps orelse 30.0;
     const loop: bool = core.loop;
+    var exit: bool = false;
 
     var it = dir.iterate();
     var buffer: []u8 = undefined;
@@ -205,8 +215,16 @@ fn playback(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     render.cursor_hide();
     defer render.cursor_show();
 
-    while (true) {
+    while (!exit) {
         while (it.next() catch null) |entry| {
+            if (input_handler.getKey()) |k| switch (k) {
+                'q', 'Q' => {
+                    exit = true;
+                    break;
+                },
+                else => {},
+            };
+
             if (entry.kind != .file) continue;
             if (!std.mem.startsWith(u8, entry.name, "frame_")) continue;
 
@@ -224,6 +242,8 @@ fn playback(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
         it.reset();
     }
 
+    input_handler.endInputDetection();
+    input_thread.detach();
     return null;
 }
 
