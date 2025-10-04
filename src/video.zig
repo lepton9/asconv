@@ -119,6 +119,7 @@ pub const Video = struct {
     frame: []u32,
     frame_ascii_buffer: std.ArrayList(u8),
     edges: ?corelib.EdgeData = null,
+    exit: bool = false,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, height: usize, width: usize) !*Video {
@@ -276,23 +277,59 @@ pub fn process_video(
     video.set_target_fps(target_fps);
     render.frames_total = total_frames(stream);
     render.show_progress = display_progress;
+    core.stats.fps = 0;
 
-    var timer_read = try corelib.time.Timer.start(&core.stats.read);
-    var timer_fps = try corelib.time.Timer.start(&core.stats.fps.?);
+    while (!video.exit) {
+        try process_frames(
+            allocator,
+            core,
+            video,
+            render,
+            fmt_ctx,
+            codec_ctx,
+            sws,
+            &packet,
+            frame,
+            frame_rgba,
+            video_stream_index,
+        );
+        if (!core.loop or render.mode == .Dump) break;
 
-    while (av.read_frame(fmt_ctx, &packet) >= 0) {
-        if (packet.stream_index == video_stream_index) {
-            defer av.packet_unref(&packet);
+        try av.reset_video(fmt_ctx, codec_ctx, video_stream_index);
+    }
+}
 
-            if (av.send_packet(codec_ctx, &packet) != 0) continue;
+fn process_frames(
+    allocator: std.mem.Allocator,
+    core: *corelib.Core,
+    video: *Video,
+    render: *Render,
+    fmt_ctx: *av.FormatCtx,
+    codec_ctx: *av.CodecCtx,
+    sws: ?*av.SwsCtx,
+    packet: *av.Packet,
+    frame: *av.Frame,
+    frame_rgba: *av.Frame,
+    stream_idx: usize,
+) !void {
+    var timer_read = try corelib.time.Timer.start_add(&core.stats.read);
+    var timer_fps = try corelib.time.Timer.start_add(&core.stats.fps.?);
+    var frame_no: usize = 0;
+
+    while (av.read_frame(fmt_ctx, packet) >= 0) {
+        if (packet.stream_index == stream_idx) {
+            defer av.packet_unref(packet);
+
+            if (av.send_packet(codec_ctx, packet) != 0) continue;
             while (av.receive_frame(codec_ctx, frame) == 0) {
                 timer_read.stop();
                 defer timer_read.reset();
                 if (render.mode == .Realtime and core.drop_frames) {
-                    const target_time = core.stats.frames_n.? * video.frame_ns;
+                    const target_time = frame_no * video.frame_ns;
                     const elapsed = timer_fps.read();
                     if (elapsed > target_time + video.frame_ns) {
                         // More than 1 frame late
+                        frame_no += 1;
                         core.stats.frames_n.? += 1;
                         core.stats.dropped_frames.? += 1;
                         continue;
@@ -317,14 +354,15 @@ pub fn process_video(
                 try render.handle_frame(
                     allocator,
                     try video.frame_to_ascii(),
-                    core.stats.frames_n.?,
+                    frame_no,
                 );
 
                 core.stats.frames_n.? += 1;
+                frame_no += 1;
                 if (render.mode == .Dump) continue;
 
                 // Target time for the next frame
-                const next_target_time = (core.stats.frames_n.?) * video.frame_ns;
+                const next_target_time = frame_no * video.frame_ns;
                 const now = timer_fps.read();
                 if (now < next_target_time) {
                     std.Thread.sleep(next_target_time - now);

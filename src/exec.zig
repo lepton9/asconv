@@ -196,7 +196,6 @@ fn playback(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     );
 
     const fps: f32 = core.fps orelse 30.0;
-    const loop: bool = core.loop;
     var exit: bool = false;
 
     var it = dir.iterate();
@@ -238,7 +237,7 @@ fn playback(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
             std.Thread.sleep(ns);
             frame_n += 1;
         }
-        if (!loop) break;
+        if (!core.loop) break;
         it.reset();
     }
 
