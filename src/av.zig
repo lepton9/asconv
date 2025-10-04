@@ -17,6 +17,7 @@ pub const Frame = c.AVFrame;
 pub const FormatCtx = c.AVFormatContext;
 pub const CodecCtx = c.struct_AVCodecContext;
 pub const Stream = c.struct_AVStream;
+pub const SwsCtx = c.struct_SwsContext;
 
 pub fn open_video_file(file_path: []const u8) !*FormatCtx {
     var fmt_ctx: ?*c.AVFormatContext = null;
@@ -61,6 +62,17 @@ pub fn frame_free(frame: **Frame) void {
 
 pub fn read_frame(fmt_ctx: *FormatCtx, packet: *Packet) c_int {
     return c.av_read_frame(fmt_ctx, packet);
+}
+
+pub fn reset_video(
+    fmt_ctx: *FormatCtx,
+    codec_ctx: *CodecCtx,
+    stream_idx: usize,
+) !void {
+    if (c.av_seek_frame(fmt_ctx, @intCast(stream_idx), 0, c.AVSEEK_FLAG_BACKWARD) < 0)
+        return error.CannotSeek;
+
+    c.avcodec_flush_buffers(codec_ctx);
 }
 
 pub fn send_packet(codec_ctx: *CodecCtx, packet: *Packet) c_int {
