@@ -22,7 +22,7 @@ sudo pacman -S ffmpeg
 
   *Ubuntu/Debian*:
 ```
-sudo apt-get install -y ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswscale-dev pkg-config
+sudo apt-get install -y ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
 ```
 
   *Windows*:
@@ -32,7 +32,7 @@ choco install -y ffmpeg-shared
 
   *Mac*:
 ```
-brew install ffmpeg pkgconf coreutils
+brew install ffmpeg coreutils
 ```
 
 ## Usage
@@ -44,6 +44,7 @@ asconv [command] [options]
 ```
 ascii                                    Convert image to ascii
 asciivid                                 Convert video to ascii
+playback                                 Play converted ascii video
 size                                     Show size of the image
 help                                     Print help
 ```
@@ -65,6 +66,8 @@ help                                     Print help
 -t, --time                               Show the time taken to convert the image
     --config      <string>               Set custom config path to use
     --ccharset    <key>                  Use custom characters that are saved in the config
+    --fps         <float>                Set target FPS for video
+-l, --loop                               Loop the video
 -p, --progress                           Display the progress of converting video to ASCII
 -d, --dropframes                         Enable frame dropping to maintain target FPS
 ```
