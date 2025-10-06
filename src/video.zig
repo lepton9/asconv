@@ -2,6 +2,7 @@ const std = @import("std");
 const av = @import("av");
 const corelib = @import("core");
 const term = @import("term");
+const Input = @import("input").Input;
 
 pub const OutputMode = enum {
     Realtime,
@@ -68,7 +69,8 @@ const Render = struct {
     }
 
     fn print_frame(self: *Render, frame: []const u8) !void {
-        try self.stdout.printf("\x1b[H{s}", .{frame});
+        try self.stdout.writef("\x1b[H");
+        try self.stdout.writef(frame);
     }
 
     fn dump_frame(
@@ -279,12 +281,21 @@ pub fn process_video(
     render.show_progress = display_progress;
     core.stats.fps = 0;
 
+    var input_handler = try Input.init(allocator, true);
+    defer input_handler.deinit();
+    const input_thread = try std.Thread.spawn(
+        .{ .allocator = allocator },
+        Input.run,
+        .{input_handler},
+    );
+
     while (!video.exit) {
         try process_frames(
             allocator,
             core,
             video,
             render,
+            input_handler,
             fmt_ctx,
             codec_ctx,
             sws,
@@ -297,6 +308,8 @@ pub fn process_video(
 
         try av.reset_video(fmt_ctx, codec_ctx, video_stream_index);
     }
+    input_handler.endInputDetection();
+    input_thread.detach();
 }
 
 fn process_frames(
@@ -304,6 +317,7 @@ fn process_frames(
     core: *corelib.Core,
     video: *Video,
     render: *Render,
+    input: *Input,
     fmt_ctx: *av.FormatCtx,
     codec_ctx: *av.CodecCtx,
     sws: ?*av.SwsCtx,
@@ -317,6 +331,13 @@ fn process_frames(
     var frame_no: usize = 0;
 
     while (av.read_frame(fmt_ctx, packet) >= 0) {
+        if (input.getKey()) |k| switch (k) {
+            'q', 'Q' => {
+                video.exit = true;
+                break;
+            },
+            else => {},
+        };
         if (packet.stream_index == stream_idx) {
             defer av.packet_unref(packet);
 

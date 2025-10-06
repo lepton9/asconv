@@ -107,6 +107,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exec_mod.addImport("input", input_mod);
+    video_mod.addImport("input", input_mod);
 
     // Result
     const result_mod = b.createModule(.{
