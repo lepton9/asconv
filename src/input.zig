@@ -29,12 +29,12 @@ pub const Input = struct {
 
     pub fn run(self: *Input) !void {
         var stdin = std.fs.File.stdin();
-        if (self.raw_input) try rawModeOff(&stdin);
+        if (self.raw_input) try rawModeOn(&stdin);
         while (!self.exit) {
             const key = self.detectKeyPress();
             if (key) |k| try self.handleKeyPress(k);
         }
-        if (self.raw_input) try rawModeOn(&stdin);
+        if (self.raw_input) try rawModeOff(&stdin);
     }
 
     pub fn endInputDetection(self: *Input) void {
@@ -61,12 +61,13 @@ pub const Input = struct {
 };
 
 fn rawModeOn(stdin: *const std.fs.File) !void {
-    const term = try std.posix.tcgetattr(stdin.handle);
+    var term = try std.posix.tcgetattr(stdin.handle);
+    term.lflag.ICANON = false;
+    term.lflag.ECHO = false;
     try std.posix.tcsetattr(stdin.handle, .NOW, term);
 }
 
 fn rawModeOff(stdin: *const std.fs.File) !void {
-    var term = try std.posix.tcgetattr(stdin.handle);
-    term.lflag.ICANON = false;
+    const term = try std.posix.tcgetattr(stdin.handle);
     try std.posix.tcsetattr(stdin.handle, .NOW, term);
 }
