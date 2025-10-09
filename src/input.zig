@@ -29,6 +29,11 @@ pub const Input = struct {
 
     pub fn run(self: *Input) !void {
         var stdin = std.fs.File.stdin();
+        // Exit if stdin is not a terminal
+        if (!std.posix.isatty(stdin.handle)) {
+            self.exit = true;
+            return;
+        }
         if (self.raw_input) try rawModeOn(&stdin);
         while (!self.exit) {
             const key = self.detectKeyPress();
