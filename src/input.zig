@@ -66,6 +66,7 @@ pub const Input = struct {
 };
 
 fn rawModeOn(stdin: *const std.fs.File) !void {
+    if (builtin.os.tag == .windows) return;
     var term = try std.posix.tcgetattr(stdin.handle);
     term.lflag.ICANON = false;
     term.lflag.ECHO = false;
@@ -73,6 +74,7 @@ fn rawModeOn(stdin: *const std.fs.File) !void {
 }
 
 fn rawModeOff(stdin: *const std.fs.File) !void {
+    if (builtin.os.tag == .windows) return;
     const term = try std.posix.tcgetattr(stdin.handle);
     try std.posix.tcsetattr(stdin.handle, .NOW, term);
 }

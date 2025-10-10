@@ -1,5 +1,4 @@
 const std = @import("std");
-const cwd = std.fs.cwd();
 const cli = @import("cli");
 const exec = @import("exec");
 const cmd = cli.cmd;
@@ -31,7 +30,7 @@ test "sobel" {
             std.debug.print("Error: {}\n", .{err.err});
         }
     }
-    try cwd.deleteFile(output);
+    try std.fs.cwd().deleteFile(output);
 }
 
 test "dog" {
@@ -53,7 +52,7 @@ test "dog" {
             std.debug.print("Error: {}\n", .{err.err});
         }
     }
-    try cwd.deleteFile(output);
+    try std.fs.cwd().deleteFile(output);
 }
 
 test "log" {
@@ -75,7 +74,7 @@ test "log" {
             std.debug.print("Error: {}\n", .{err.err});
         }
     }
-    try cwd.deleteFile(output);
+    try std.fs.cwd().deleteFile(output);
 }
 
 test "color" {
@@ -96,7 +95,7 @@ test "color" {
             std.debug.print("Error: {}\n", .{err.err});
         }
     }
-    try cwd.deleteFile(output);
+    try std.fs.cwd().deleteFile(output);
 }
 
 test "charset" {
@@ -118,5 +117,5 @@ test "charset" {
             std.debug.print("Error: {}\n", .{err.err});
         }
     }
-    try cwd.deleteFile(output);
+    try std.fs.cwd().deleteFile(output);
 }
