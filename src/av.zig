@@ -16,15 +16,16 @@ pub const Frame = c.AVFrame;
 
 pub const FormatCtx = c.AVFormatContext;
 pub const CodecCtx = c.struct_AVCodecContext;
+pub const InputFormat = c.AVInputFormat;
 pub const Stream = c.struct_AVStream;
 pub const SwsCtx = c.struct_SwsContext;
 
-pub fn open_video_file(file_path: []const u8) !*FormatCtx {
+pub fn format_open_input(input_name: []const u8, input_fmt: ?*InputFormat) !*FormatCtx {
     var fmt_ctx: ?*c.AVFormatContext = null;
-    if (c.avformat_open_input(&fmt_ctx, file_path.ptr, null, null) != 0)
-        return error.CannotOpenFile;
+    if (c.avformat_open_input(&fmt_ctx, input_name.ptr, input_fmt, null) != 0)
+        return error.CannotOpenInput;
     if (c.avformat_find_stream_info(fmt_ctx, null) < 0)
-        return error.CannotFindStream;
+        return error.NoStreamInfo;
     return fmt_ctx orelse error.CannotFindStream;
 }
 
@@ -91,6 +92,4 @@ pub const frame_get_buffer = c.av_frame_get_buffer;
 pub const sws_scale = c.sws_scale;
 pub const sws_get_context = c.sws_getContext;
 
-pub const format_open_input = c.avformat_open_input;
-pub const format_close_input = c.avformat_close_input;
-pub const format_find_stream_info = c.avformat_find_stream_info;
+pub const find_input_format = c.av_find_input_format;
