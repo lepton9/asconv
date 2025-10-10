@@ -182,6 +182,9 @@ pub fn build(b: *std.Build) void {
     const run_test_cmd = b.addRunArtifact(tests);
     run_test_cmd.step.dependOn(b.getInstallStep());
 
+    run_test_cmd.addPathDir(b.lib_dir);
+    run_cmd.addPathDir(b.lib_dir);
+
     // Allows to add params to program when building: `zig build run -- arg1 arg2 etc`
     if (b.args) |args| {
         run_cmd.addArgs(args);
@@ -273,6 +276,9 @@ fn linkFfmpeg(
                             ) catch return;
                             b.getInstallStep().dependOn(
                                 &b.addInstallBinFile(.{ .cwd_relative = dll_path }, entry.name).step,
+                            );
+                            b.getInstallStep().dependOn(
+                                &b.addInstallFileWithDir(.{ .cwd_relative = dll_path }, .lib, entry.name).step,
                             );
                         }
                     }
