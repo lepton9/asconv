@@ -20,9 +20,17 @@ pub const InputFormat = c.AVInputFormat;
 pub const Stream = c.struct_AVStream;
 pub const SwsCtx = c.struct_SwsContext;
 
-pub fn format_open_input(input_name: []const u8, input_fmt: ?*InputFormat) !*FormatCtx {
+pub fn format_open_input(
+    input_name: []const u8,
+    input_fmt: ?[*c]const InputFormat,
+) !*FormatCtx {
     var fmt_ctx: ?*c.AVFormatContext = null;
-    if (c.avformat_open_input(&fmt_ctx, input_name.ptr, input_fmt, null) != 0)
+    if (c.avformat_open_input(
+        &fmt_ctx,
+        input_name.ptr,
+        input_fmt orelse null,
+        null,
+    ) != 0)
         return error.CannotOpenInput;
     if (c.avformat_find_stream_info(fmt_ctx, null) < 0)
         return error.NoStreamInfo;

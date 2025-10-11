@@ -205,7 +205,11 @@ fn playback(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     while (it.next() catch null) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.startsWith(u8, entry.name, "frame_")) continue;
-        buffer = try dir.readFileAlloc(entry.name, allocator, std.Io.Limit.unlimited);
+        buffer = try dir.readFileAlloc(
+            allocator,
+            entry.name,
+            std.Io.Limit.unlimited.toInt().?,
+        );
         it.reset();
         break;
     }
