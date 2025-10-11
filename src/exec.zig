@@ -542,6 +542,10 @@ pub fn cmd_func(allocator: std.mem.Allocator, cli_: *cli.Cli, args_struct: *cons
         try write_to_stdio(version);
         return null;
     }
+    if (cli_.find_opt("help")) |_| {
+        try help(allocator, args_struct);
+        return null;
+    }
     if (cli_.cmd == null) {
         std.log.info("No command", .{});
         return null;

@@ -119,7 +119,7 @@ pub fn main() !u8 {
     var alloc = gpa.allocator();
 
     const app = comptime cmd.ArgsStructure{
-        .cmd_required = true,
+        .cmd_required = false,
         .commands = &exec.commands,
         .options = &exec.options,
     };
