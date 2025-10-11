@@ -171,6 +171,13 @@ pub const options = [_]Option{
         .required = false,
         .arg = null,
     },
+    .{
+        .long_name = "version",
+        .short_name = "v",
+        .desc = "Print version number",
+        .required = false,
+        .arg = null,
+    },
 };
 
 fn validate_options(comptime opts: []const Option) void {

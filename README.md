@@ -70,6 +70,7 @@ help                                     Print help
 -l, --loop                               Loop the video
 -p, --progress                           Display the progress of converting video to ASCII
 -d, --dropframes                         Enable frame dropping to maintain target FPS
+-v, --version                            Print version number
 ```
 > Option arguments prefixed with `?` are optional.
 

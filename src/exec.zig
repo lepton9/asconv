@@ -15,6 +15,7 @@ const ImageRaw = image.ImageRaw;
 
 pub const build_options = @import("build_options");
 const enable_video = build_options.video;
+const version = build_options.version;
 
 pub const commands = usage.commands;
 pub const options = usage.options;
@@ -537,6 +538,10 @@ fn help(allocator: std.mem.Allocator, args_struct: *const cmd.ArgsStructure) !vo
 }
 
 pub fn cmd_func(allocator: std.mem.Allocator, cli_: *cli.Cli, args_struct: *const cmd.ArgsStructure) !?result.ErrorWrap {
+    if (cli_.find_opt("version")) |_| {
+        try write_to_stdio(version);
+        return null;
+    }
     if (cli_.cmd == null) {
         std.log.info("No command", .{});
         return null;

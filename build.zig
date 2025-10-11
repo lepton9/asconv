@@ -1,4 +1,5 @@
 const std = @import("std");
+const zon = @import("build.zig.zon");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -9,6 +10,8 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const CFlags = &[_][]const u8{"-fPIC"};
     const options = b.addOptions();
+
+    options.addOption([]const u8, "version", zon.version);
 
     const enable_video = b.option(
         bool,
