@@ -54,14 +54,14 @@ pub const options = [_]Option{
     },
     .{
         .long_name = "width",
-        .short_name = "w",
+        .short_name = "W",
         .desc = "Width of wanted image",
         .required = false,
         .arg = .{ .name = "int" },
     },
     .{
         .long_name = "height",
-        .short_name = "h",
+        .short_name = "H",
         .desc = "Height of wanted image",
         .required = false,
         .arg = .{ .name = "int" },
@@ -180,7 +180,7 @@ pub const options = [_]Option{
     },
     .{
         .long_name = "help",
-        .short_name = null,
+        .short_name = "h",
         .desc = "Print help",
         .required = false,
         .arg = null,

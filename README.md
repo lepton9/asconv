@@ -53,8 +53,8 @@ help                                     Print help
 ```
 -i, --input       <path>                 Input file or url
 -o, --out         <filename>             Path of the output file (omit to output to stdout)
--w, --width       <int>                  Width of wanted image
--h, --height      <int>                  Height of wanted image
+-W, --width       <int>                  Width of wanted image
+-H, --height      <int>                  Height of wanted image
 -s, --scale       <float>                Scale the image to size
 -f, --fit                                Scale the image to fit the terminal
 -b, --brightness  <float>                Set brightness boost
@@ -71,7 +71,7 @@ help                                     Print help
 -p, --progress                           Display the progress of converting video to ASCII
 -d, --dropframes                         Enable frame dropping to maintain target FPS
 -v, --version                            Print version number
-    --help                               Print help
+-h, --help                               Print help
 ```
 > Option arguments prefixed with `?` are optional.
 
