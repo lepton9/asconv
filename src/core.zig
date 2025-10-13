@@ -189,11 +189,14 @@ pub const Core = struct {
     }
 
     pub fn apply_scale(core: *Core, width: *usize, height: *usize) !void {
-        const w: usize = core.width orelse width.*;
-        const h: usize = core.height orelse height.*;
+        const w: usize = core.width orelse @intFromFloat(utils.itof(f32, width.*) *
+            utils.itof(f32, core.height orelse height.*) / utils.itof(f32, height.*));
+        const h: usize = core.height orelse @intFromFloat(utils.itof(f32, height.*) *
+            utils.itof(f32, core.width orelse width.*) / utils.itof(f32, width.*));
+
         if (core.fit_screen) {
             const term_size = try term.get_term_size();
-            core.scale = get_scale(
+            core.scale = get_scale_fit(
                 @intCast(2 * w),
                 @intCast(h),
                 term_size.width,
@@ -663,7 +666,7 @@ pub fn append_truecolor(
     ));
 }
 
-pub fn get_scale(img_w: u32, img_h: u32, target_w: u32, target_h: u32) f32 {
+pub fn get_scale_fit(img_w: u32, img_h: u32, target_w: u32, target_h: u32) f32 {
     const scale_w: f32 = utils.itof(f32, target_w) / utils.itof(f32, img_w);
     const scale_h: f32 = utils.itof(f32, target_h) / utils.itof(f32, img_h);
     return @min(scale_w, scale_h);
