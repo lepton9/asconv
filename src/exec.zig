@@ -185,7 +185,7 @@ fn playback(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     }
 
     var frame_n: usize = 0;
-    const render = try term.TermRenderer.init(allocator);
+    const render = try term.TermRenderer.init(allocator, 4096);
     defer render.deinit(allocator);
 
     var input_handler = try Input.init(allocator, true);

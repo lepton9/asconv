@@ -21,7 +21,7 @@ const Render = struct {
 
     fn init(allocator: std.mem.Allocator, height: usize, width: usize) !*Render {
         const render = try allocator.create(Render);
-        const stdout = try term.TermRenderer.init(allocator);
+        const stdout = try term.TermRenderer.init(allocator, 4096);
         render.* = .{
             .width = width,
             .height = height,
@@ -65,7 +65,7 @@ const Render = struct {
                 try self.dump_frame(allocator, frame, frame_no);
             },
         }
-        if (self.show_progress) self.print_progress(frame_no);
+        if (self.show_progress) try self.print_progress(frame_no);
     }
 
     fn print_frame(self: *Render, frame: []const u8) !void {
@@ -94,7 +94,7 @@ const Render = struct {
         try file.writeAll(frame);
     }
 
-    fn print_progress(self: *Render, frame_no: usize) void {
+    fn print_progress(self: *Render, frame_no: usize) !void {
         if (self.frames_total == 0) return;
         var stdout = self.stdout;
         const percentage: f64 = @as(f64, @floatFromInt(frame_no)) /
@@ -103,12 +103,13 @@ const Render = struct {
             @as(f64, @floatFromInt(self.bar_width))));
         const empty: usize = self.bar_width - filled;
 
-        stdout.write("\x1b[0G\x1b[0K") catch {};
-        stdout.write("[") catch {};
-        for (0..filled) |_| stdout.write("#") catch {};
-        for (0..empty) |_| stdout.write("-") catch {};
-        stdout.writef("] ") catch {};
-        stdout.printf("{d:.0}%", .{percentage * 100}) catch {};
+        try stdout.write("\x1b[0G");
+        try stdout.write("[");
+        for (0..filled) |_| try stdout.write("#");
+        for (0..empty) |_| try stdout.write("-");
+        try stdout.write("] ");
+        stdout.print("{d:.0}%", .{percentage * 100}) catch {};
+        try stdout.flush();
     }
 };
 

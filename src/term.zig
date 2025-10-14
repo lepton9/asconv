@@ -47,18 +47,20 @@ fn term_size_windows() !TermSize {
 
 pub const TermRenderer = struct {
     stdout: std.fs.File.Writer,
+    buffer: ?[]u8,
 
-    pub fn init(allocator: std.mem.Allocator) !*TermRenderer {
+    pub fn init(allocator: std.mem.Allocator, buffer_size: ?usize) !*TermRenderer {
         const render = try allocator.create(TermRenderer);
-        var buf: [4096]u8 = undefined;
-        const stdout = std.fs.File.stdout().writer(&buf);
-        render.* = .{
-            .stdout = stdout,
-        };
+        render.buffer = if (buffer_size) |size|
+            try allocator.alloc(u8, size)
+        else
+            null;
+        render.stdout = std.fs.File.stdout().writer(render.buffer orelse &.{});
         return render;
     }
 
     pub fn deinit(self: *TermRenderer, allocator: std.mem.Allocator) void {
+        if (self.buffer) |buf| allocator.free(buf);
         allocator.destroy(self);
     }
 
