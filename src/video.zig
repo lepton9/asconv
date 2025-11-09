@@ -277,6 +277,9 @@ const AvVideo = struct {
     fn deinit(av_video: *AvVideo) void {
         av.frame_free(&av_video.frame);
         av.frame_free(&av_video.frame_rgba);
+        if (av_video.sws) |ctx| av.sws_free_context(ctx);
+        av.codec_free_context(@ptrCast(&av_video.codec_ctx));
+        av.format_free_context(av_video.fmt_ctx);
     }
 };
 
@@ -288,6 +291,7 @@ pub fn process_video(
     display_progress: bool,
 ) !void {
     var av_video = try AvVideo.open_video(path, null);
+    defer av_video.deinit();
 
     var width: usize = @intCast(av_video.codec_ctx.width);
     var height: usize = @intCast(av_video.codec_ctx.height);
@@ -353,6 +357,7 @@ fn process_frames(
     var packet: av.Packet = undefined;
 
     while (av.read_frame(av_video.fmt_ctx, &packet) >= 0) {
+        defer av.packet_unref(&packet);
         if (input.getKey()) |k| switch (k) {
             'q', 'Q' => {
                 video.exit = true;
@@ -361,8 +366,6 @@ fn process_frames(
             else => {},
         };
         if (packet.stream_index == av_video.stream_idx) {
-            defer av.packet_unref(&packet);
-
             if (av.send_packet(av_video.codec_ctx, &packet) != 0) continue;
             while (av.receive_frame(av_video.codec_ctx, av_video.frame) == 0) {
                 timer_read.stop();

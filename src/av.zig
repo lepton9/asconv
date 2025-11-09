@@ -99,5 +99,9 @@ pub fn receive_frame(codec_ctx: *CodecCtx, frame: *Frame) c_int {
 pub const frame_get_buffer = c.av_frame_get_buffer;
 pub const sws_scale = c.sws_scale;
 pub const sws_get_context = c.sws_getContext;
+pub const sws_free_context = c.sws_freeContext;
+
+pub const codec_free_context = c.avcodec_free_context;
+pub const format_free_context = c.avformat_free_context;
 
 pub const find_input_format = c.av_find_input_format;

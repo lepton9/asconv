@@ -3,7 +3,8 @@ const builtin = @import("builtin");
 
 pub const Input = struct {
     key_queue: std.ArrayList(u8),
-    stdin: std.fs.File.Reader,
+    stdin: std.fs.File.Reader = undefined,
+    read_buf: [8]u8 = undefined,
     raw_input: bool,
     exit: bool = false,
     mutex: std.Thread.Mutex,
@@ -11,14 +12,13 @@ pub const Input = struct {
 
     pub fn init(allocator: std.mem.Allocator, raw_input: bool) !*Input {
         const input = try allocator.create(Input);
-        var buf: [8]u8 = undefined;
         input.* = .{
             .key_queue = try std.ArrayList(u8).initCapacity(allocator, 10),
-            .stdin = std.fs.File.stdin().reader(&buf),
             .raw_input = raw_input,
             .mutex = std.Thread.Mutex{},
             .allocator = allocator,
         };
+        input.stdin = std.fs.File.stdin().reader(&input.read_buf);
         return input;
     }
 
