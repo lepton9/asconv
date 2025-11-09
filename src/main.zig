@@ -3,8 +3,8 @@ const result = @import("result");
 const exec = @import("exec");
 const zcli = @import("zcli");
 
-fn handle_exec_error(allocator: std.mem.Allocator, err: result.ErrorWrap) void {
-    defer err.deinit(allocator);
+fn handle_exec_error(gpa: std.mem.Allocator, err: result.ErrorWrap) void {
+    defer err.deinit(gpa);
     switch (err.err) {
         exec.ExecError.FileLoadError => {
             std.log.err("Failed to load image '{s}'", .{err.get_ctx()});

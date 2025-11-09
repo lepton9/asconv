@@ -48,22 +48,24 @@ pub const ErrorWrap = struct {
     err: anyerror,
     context: ?[]const u8 = null,
 
-    pub fn create(
-        allocator: std.mem.Allocator,
+    pub fn create(err: anyerror) ErrorWrap {
+        return .{ .err = err };
+    }
+
+    pub fn create_ctx(
+        gpa: std.mem.Allocator,
         err: anyerror,
         comptime fmt: []const u8,
         args: anytype,
     ) ErrorWrap {
-        const formatted: []u8 = std.fmt.allocPrint(allocator, fmt, args) catch {
-            return .{ .err = err };
+        return .{
+            .err = err,
+            .context = std.fmt.allocPrint(gpa, fmt, args) catch null,
         };
-        return .{ .err = err, .context = formatted };
     }
 
-    pub fn deinit(self: ErrorWrap, allocator: std.mem.Allocator) void {
-        if (self.context) |ctx| {
-            allocator.free(ctx);
-        }
+    pub fn deinit(self: ErrorWrap, gpa: std.mem.Allocator) void {
+        if (self.context) |ctx| gpa.free(ctx);
     }
 
     pub fn get_ctx(self: ErrorWrap) []const u8 {

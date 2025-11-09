@@ -39,7 +39,7 @@ pub const options = [_]Opt{
     .{
         .long_name = "out",
         .short_name = "o",
-        .desc = "Path of output file",
+        .desc = "Path of the output file (omit to output to stdout)",
         .required = false,
         .arg = .{ .name = "filename" },
     },
