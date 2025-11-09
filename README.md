@@ -46,7 +46,6 @@ ascii                                    Convert image to ascii
 asciivid                                 Convert video to ascii
 playback                                 Play converted ascii video
 size                                     Show size of the image
-help                                     Print help
 ```
 
 ### Options
@@ -60,9 +59,9 @@ help                                     Print help
 -b, --brightness  <float>                Set brightness boost
 -r, --reverse                            Reverse the charset
     --charset     <string>               Set custom characters to use
--c, --color       <?color256|truecolor>  Output with ANSI colors and set color range (default: color256)
--e, --edges       <?sobel|LoG|DoG>       Turn on edge detection and set algorithm (default: sobel)
-    --sigma       <float>                Sigma value for DoG and LoG (default: 1.0)
+-c, --color       <?color256|truecolor>  Output with ANSI colors and set color range [default: color256]
+-e, --edges       <?sobel|LoG|DoG>       Turn on edge detection and set algorithm [default: sobel]
+    --sigma       <float>                Sigma value for DoG and LoG [default: 1.0]
 -t, --time                               Show the time taken to convert the image
     --config      <string>               Set custom config path to use
     --ccharset    <key>                  Use custom characters that are saved in the config
@@ -70,7 +69,7 @@ help                                     Print help
 -l, --loop                               Loop the video
 -p, --progress                           Display the progress of converting video to ASCII
 -d, --dropframes                         Enable frame dropping to maintain target FPS
--v, --version                            Print version number
+-V, --version                            Print version
 -h, --help                               Print help
 ```
 > Option arguments prefixed with `?` are optional.

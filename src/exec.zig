@@ -25,12 +25,6 @@ pub const ResultImage = result.Result(ImageRaw, ErrorWrap);
 pub const ExecError = error{
     FileLoadError,
     FileLoadErrorMem,
-    ParseErrorHeight,
-    ParseErrorWidth,
-    ParseErrorScale,
-    ParseErrorBrightness,
-    ParseErrorSigma,
-    ParseErrorFps,
     DuplicateInput,
     NoCommand,
     NoInput,
@@ -384,27 +378,17 @@ fn ascii_opts(
     while (opt_it.next()) |entry| {
         const opt = entry.value_ptr.*;
         if (std.mem.eql(u8, opt.name, "height")) {
-            core.height = std.fmt.parseInt(u32, opt.value.?.string, 10) catch {
-                return ErrorWrap.create_ctx(allocator, ExecError.ParseErrorHeight, "{s}", .{opt.value.?.string});
-            };
+            core.height = @intCast(@max(opt.value.?.int, 0));
         } else if (std.mem.eql(u8, opt.name, "width")) {
-            core.width = std.fmt.parseInt(u32, opt.value.?.string, 10) catch {
-                return ErrorWrap.create_ctx(allocator, ExecError.ParseErrorWidth, "{s}", .{opt.value.?.string});
-            };
+            core.width = @intCast(@max(opt.value.?.int, 0));
         } else if (std.mem.eql(u8, opt.name, "scale")) {
-            core.scale = std.fmt.parseFloat(f32, opt.value.?.string) catch {
-                return ErrorWrap.create_ctx(allocator, ExecError.ParseErrorScale, "{s}", .{opt.value.?.string});
-            };
+            core.scale = @floatCast(@max(opt.value.?.float, 0));
         } else if (std.mem.eql(u8, opt.name, "fit")) {
             core.fit_screen = true;
         } else if (std.mem.eql(u8, opt.name, "brightness")) {
-            core.brightness = std.fmt.parseFloat(f32, opt.value.?.string) catch {
-                return ErrorWrap.create_ctx(allocator, ExecError.ParseErrorBrightness, "{s}", .{opt.value.?.string});
-            };
+            core.brightness = @floatCast(@max(opt.value.?.float, 0));
         } else if (std.mem.eql(u8, opt.name, "fps")) {
-            core.fps = std.fmt.parseFloat(f32, opt.value.?.string) catch {
-                return ErrorWrap.create_ctx(allocator, ExecError.ParseErrorFps, "{s}", .{opt.value.?.string});
-            };
+            core.fps = @floatCast(@max(opt.value.?.float, 0));
         } else if (std.mem.eql(u8, opt.name, "loop")) {
             core.loop = true;
         } else if (std.mem.eql(u8, opt.name, "reverse")) {
@@ -428,11 +412,7 @@ fn ascii_opts(
                 };
             }
         } else if (std.mem.eql(u8, opt.name, "sigma")) {
-            core.set_sigma(
-                std.fmt.parseFloat(f32, opt.value.?.string) catch {
-                    return ErrorWrap.create_ctx(allocator, ExecError.ParseErrorSigma, "{s}", .{opt.value.?.string});
-                },
-            );
+            core.set_sigma(@floatCast(@max(opt.value.?.float, 0)));
         } else if (std.mem.eql(u8, opt.name, "ccharset")) {
             if (conf) |c| {
                 const charsets = c.table.get_table().get("charsets");

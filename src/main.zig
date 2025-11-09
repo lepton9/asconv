@@ -12,24 +12,6 @@ fn handle_exec_error(gpa: std.mem.Allocator, err: result.ErrorWrap) u8 {
         exec.ExecError.FileLoadErrorMem => {
             std.log.err("Failed to load image from memory", .{});
         },
-        exec.ExecError.ParseErrorHeight => {
-            std.log.err("Failed to parse height '{s}'", .{err.get_ctx()});
-        },
-        exec.ExecError.ParseErrorWidth => {
-            std.log.err("Failed to parse width '{s}'", .{err.get_ctx()});
-        },
-        exec.ExecError.ParseErrorScale => {
-            std.log.err("Failed to parse scale '{s}'", .{err.get_ctx()});
-        },
-        exec.ExecError.ParseErrorBrightness => {
-            std.log.err("Failed to parse brightness '{s}'", .{err.get_ctx()});
-        },
-        exec.ExecError.ParseErrorSigma => {
-            std.log.err("Failed to parse sigma '{s}'", .{err.get_ctx()});
-        },
-        exec.ExecError.ParseErrorFps => {
-            std.log.err("Failed to parse FPS '{s}'", .{err.get_ctx()});
-        },
         exec.ExecError.DuplicateInput => {
             std.log.err("Multiple input files '{s}'", .{err.get_ctx()});
         },
