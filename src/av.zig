@@ -20,10 +20,19 @@ pub const InputFormat = c.AVInputFormat;
 pub const Stream = c.struct_AVStream;
 pub const SwsCtx = c.struct_SwsContext;
 
+pub const AVError = error{
+    FailedOpenInput,
+    NoStreamInfo,
+    CannotFindStream,
+    NoVideoStream,
+    CannotFindDecoder,
+    CannotOpenDecoder,
+};
+
 pub fn format_open_input(
     input_name: []const u8,
     input_fmt: ?[*c]const InputFormat,
-) !*FormatCtx {
+) AVError!*FormatCtx {
     var fmt_ctx: ?*c.AVFormatContext = null;
     if (c.avformat_open_input(
         &fmt_ctx,
@@ -31,10 +40,10 @@ pub fn format_open_input(
         input_fmt orelse null,
         null,
     ) != 0)
-        return error.CannotOpenInput;
+        return AVError.FailedOpenInput;
     if (c.avformat_find_stream_info(fmt_ctx, null) < 0)
-        return error.NoStreamInfo;
-    return fmt_ctx orelse error.CannotFindStream;
+        return AVError.NoStreamInfo;
+    return fmt_ctx orelse AVError.CannotFindStream;
 }
 
 pub fn get_stream_ind(fmt_ctx: *c.AVFormatContext) !usize {
@@ -46,18 +55,19 @@ pub fn get_stream_ind(fmt_ctx: *c.AVFormatContext) !usize {
         }
     }
     if (video_stream_index == -1)
-        return error.NoVideoStream;
+        return AVError.NoVideoStream;
     return @intCast(video_stream_index);
 }
 
 pub fn get_decoder(fmt_ctx: *c.AVFormatContext, video_stream_index: usize) !*CodecCtx {
     const codecpar = fmt_ctx.*.streams[@intCast(video_stream_index)].*.codecpar;
-    const codec = c.avcodec_find_decoder(codecpar.*.codec_id) orelse return error.NoDecoder;
+    const codec = c.avcodec_find_decoder(codecpar.*.codec_id) orelse
+        return AVError.CannotFindDecoder;
 
     const codec_ctx = c.avcodec_alloc_context3(codec);
     _ = c.avcodec_parameters_to_context(codec_ctx, codecpar);
     if (c.avcodec_open2(codec_ctx, codec, null) < 0)
-        return error.CannotOpenDecoder;
+        return AVError.CannotOpenDecoder;
     return codec_ctx;
 }
 

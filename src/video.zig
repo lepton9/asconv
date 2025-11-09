@@ -4,6 +4,8 @@ const corelib = @import("core");
 const term = @import("term");
 const Input = @import("input").Input;
 
+pub const AVError = av.AVError;
+
 pub const OutputMode = enum {
     Realtime,
     Dump,

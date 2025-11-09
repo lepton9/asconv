@@ -267,19 +267,29 @@ fn ascii_video(
     core: *corelib.Core,
     filename: []const u8,
 ) !?ErrorWrap {
-    if (!enable_video) return ErrorWrap.create_ctx(
-        allocator,
-        ExecError.VideoBuildOptionNotSet,
-        "{s}",
-        .{"video"},
-    );
+    if (!enable_video) return ErrorWrap.create(ExecError.VideoBuildOptionNotSet);
+    const video = @import("video");
 
     if (try ascii_opts(allocator, cli, core)) |err| {
         return err;
     }
     const progress = (cli.find_opt("progress") != null);
     const output = output_path(cli);
-    try @import("video").process_video(allocator, core, filename, output, progress);
+    video.process_video(
+        allocator,
+        core,
+        filename,
+        output,
+        progress,
+    ) catch |err| switch (err) {
+        video.AVError.FailedOpenInput => return ErrorWrap.create_ctx(
+            allocator,
+            err,
+            "{s}",
+            .{filename},
+        ),
+        else => return err,
+    };
     return null;
 }
 

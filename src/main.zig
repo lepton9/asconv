@@ -3,7 +3,7 @@ const result = @import("result");
 const exec = @import("exec");
 const zcli = @import("zcli");
 
-fn handle_exec_error(gpa: std.mem.Allocator, err: result.ErrorWrap) void {
+fn handle_exec_error(gpa: std.mem.Allocator, err: result.ErrorWrap) u8 {
     defer err.deinit(gpa);
     switch (err.err) {
         exec.ExecError.FileLoadError => {
@@ -65,14 +65,15 @@ fn handle_exec_error(gpa: std.mem.Allocator, err: result.ErrorWrap) void {
         },
         exec.ExecError.VideoBuildOptionNotSet => {
             std.log.err(
-                "Build option '-D{s}' is not set. Video support disabled",
-                .{err.get_ctx()},
+                "Build option '-Dvideo' is not set. Video support disabled",
+                .{},
             );
         },
         else => {
-            std.log.err("Error: '{s}'", .{err.get_ctx()});
+            std.log.err("{}: '{s}'", .{ err.err, err.get_ctx() });
         },
     }
+    return 1;
 }
 
 pub fn main() !u8 {
@@ -95,9 +96,6 @@ pub fn main() !u8 {
     defer cli.deinit(allocator);
 
     const err = try exec.cmd_func(allocator, cli);
-    if (err) |e| {
-        handle_exec_error(allocator, e);
-        return 1;
-    }
+    if (err) |e| return handle_exec_error(allocator, e);
     return 0;
 }
