@@ -1,121 +1,110 @@
 const std = @import("std");
-const cli = @import("cli");
+const zcli = @import("zcli");
 const exec = @import("exec");
-const cmd = cli.cmd;
-const arg = cli.arg;
 
 const test_image = "https://cdn.7tv.app/emote/01GXHWC0QG000BFY6BHVKSSEXW/4x.gif";
 const output = "test_out.txt";
 
-const app = cmd.ArgsStructure{
+const app = zcli.CliApp{
     .commands = &exec.commands,
     .options = &exec.options,
+    .positionals = &exec.positionals,
 };
 
 test "sobel" {
     const alloc = std.testing.allocator;
-    var args = try std.ArrayList(arg.ArgParse).initCapacity(alloc, 5);
-    try args.append(alloc, .{ .value = "ascii" });
-    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = output } });
-    try args.append(alloc, .{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
-    try args.append(alloc, .{ .option = .{ .name = "edges", .option_type = .long, .value = "sobel" } });
-    try args.append(alloc, .{ .value = test_image });
-    defer args.deinit(alloc);
-
-    const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
-    if (cli_result.is_ok()) {
-        const cli_ = try cli_result.unwrap_try();
-        defer cli_.deinit(alloc);
-        if (try exec.cmd_func(alloc, cli_, &app)) |err| {
-            std.debug.print("Error: {}\n", .{err.err});
-        }
+    var args = [_][:0]u8{
+        @constCast("asconv"),
+        @constCast("ascii"),
+        @constCast("--out"),
+        @constCast(output),
+        @constCast("--scale=0.1"),
+        @constCast("--edges=sobel"),
+        @constCast(test_image),
+    };
+    const cli = try zcli.parse_from(alloc, &app, &args);
+    defer cli.deinit(alloc);
+    if (try exec.cmd_func(alloc, cli)) |err| {
+        std.debug.print("Error: {}\n", .{err.err});
     }
     try std.fs.cwd().deleteFile(output);
 }
 
 test "dog" {
     const alloc = std.testing.allocator;
-    var args = try std.ArrayList(arg.ArgParse).initCapacity(alloc, 6);
-    try args.append(alloc, .{ .value = "ascii" });
-    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = output } });
-    try args.append(alloc, .{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
-    try args.append(alloc, .{ .option = .{ .name = "edges", .option_type = .long, .value = "dog" } });
-    try args.append(alloc, .{ .option = .{ .name = "sigma", .option_type = .long, .value = "1.0" } });
-    try args.append(alloc, .{ .value = test_image });
-    defer args.deinit(alloc);
-
-    const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
-    if (cli_result.is_ok()) {
-        const cli_ = try cli_result.unwrap_try();
-        defer cli_.deinit(alloc);
-        if (try exec.cmd_func(alloc, cli_, &app)) |err| {
-            std.debug.print("Error: {}\n", .{err.err});
-        }
+    var args = [_][:0]u8{
+        @constCast("asconv"),
+        @constCast("ascii"),
+        @constCast("--out"),
+        @constCast(output),
+        @constCast("--scale=0.1"),
+        @constCast("--edges=dog"),
+        @constCast("--sigma=1.0"),
+        @constCast(test_image),
+    };
+    const cli = try zcli.parse_from(alloc, &app, &args);
+    defer cli.deinit(alloc);
+    if (try exec.cmd_func(alloc, cli)) |err| {
+        std.debug.print("Error: {}\n", .{err.err});
     }
     try std.fs.cwd().deleteFile(output);
 }
 
 test "log" {
     const alloc = std.testing.allocator;
-    var args = try std.ArrayList(arg.ArgParse).initCapacity(alloc, 6);
-    try args.append(alloc, .{ .value = "ascii" });
-    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = output } });
-    try args.append(alloc, .{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
-    try args.append(alloc, .{ .option = .{ .name = "edges", .option_type = .long, .value = "log" } });
-    try args.append(alloc, .{ .option = .{ .name = "sigma", .option_type = .long, .value = "1.0" } });
-    try args.append(alloc, .{ .value = test_image });
-    defer args.deinit(alloc);
-
-    const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
-    if (cli_result.is_ok()) {
-        const cli_ = try cli_result.unwrap_try();
-        defer cli_.deinit(alloc);
-        if (try exec.cmd_func(alloc, cli_, &app)) |err| {
-            std.debug.print("Error: {}\n", .{err.err});
-        }
+    var args = [_][:0]u8{
+        @constCast("asconv"),
+        @constCast("ascii"),
+        @constCast("--out"),
+        @constCast(output),
+        @constCast("--scale=0.1"),
+        @constCast("--edges=log"),
+        @constCast("--sigma=1.0"),
+        @constCast(test_image),
+    };
+    const cli = try zcli.parse_from(alloc, &app, &args);
+    defer cli.deinit(alloc);
+    if (try exec.cmd_func(alloc, cli)) |err| {
+        std.debug.print("Error: {}\n", .{err.err});
     }
     try std.fs.cwd().deleteFile(output);
 }
 
 test "color" {
     const alloc = std.testing.allocator;
-    var args = try std.ArrayList(arg.ArgParse).initCapacity(alloc, 5);
-    try args.append(alloc, .{ .value = "ascii" });
-    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = output } });
-    try args.append(alloc, .{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
-    try args.append(alloc, .{ .option = .{ .name = "color", .option_type = .long, .value = "color256" } });
-    try args.append(alloc, .{ .value = test_image });
-    defer args.deinit(alloc);
-
-    const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
-    if (cli_result.is_ok()) {
-        const cli_ = try cli_result.unwrap_try();
-        defer cli_.deinit(alloc);
-        if (try exec.cmd_func(alloc, cli_, &app)) |err| {
-            std.debug.print("Error: {}\n", .{err.err});
-        }
+    var args = [_][:0]u8{
+        @constCast("asconv"),
+        @constCast("ascii"),
+        @constCast("--out"),
+        @constCast(output),
+        @constCast("--scale=0.1"),
+        @constCast("--color=color256"),
+        @constCast(test_image),
+    };
+    const cli = try zcli.parse_from(alloc, &app, &args);
+    defer cli.deinit(alloc);
+    if (try exec.cmd_func(alloc, cli)) |err| {
+        std.debug.print("Error: {}\n", .{err.err});
     }
     try std.fs.cwd().deleteFile(output);
 }
 
 test "charset" {
     const alloc = std.testing.allocator;
-    var args = try std.ArrayList(arg.ArgParse).initCapacity(alloc, 6);
-    try args.append(alloc, .{ .value = "ascii" });
-    try args.append(alloc, .{ .option = .{ .name = "out", .option_type = .long, .value = output } });
-    try args.append(alloc, .{ .option = .{ .name = "scale", .option_type = .long, .value = "0.1" } });
-    try args.append(alloc, .{ .option = .{ .name = "charset", .option_type = .long, .value = "@#%xo;:.," } });
-    try args.append(alloc, .{ .option = .{ .name = "reverse", .option_type = .long, .value = null } });
-    try args.append(alloc, .{ .value = test_image });
-    defer args.deinit(alloc);
-
-    const cli_result = try cli.validate_parsed_args(alloc, args.items, &app);
-    if (cli_result.is_ok()) {
-        const cli_ = try cli_result.unwrap_try();
-        defer cli_.deinit(alloc);
-        if (try exec.cmd_func(alloc, cli_, &app)) |err| {
-            std.debug.print("Error: {}\n", .{err.err});
-        }
+    var args = [_][:0]u8{
+        @constCast("asconv"),
+        @constCast("ascii"),
+        @constCast("--out"),
+        @constCast(output),
+        @constCast("--scale=0.1"),
+        @constCast("--charset=@#%xo;:.,"),
+        @constCast("--reverse"),
+        @constCast(test_image),
+    };
+    const cli = try zcli.parse_from(alloc, &app, &args);
+    defer cli.deinit(alloc);
+    if (try exec.cmd_func(alloc, cli)) |err| {
+        std.debug.print("Error: {}\n", .{err.err});
     }
     try std.fs.cwd().deleteFile(output);
 }

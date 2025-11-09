@@ -1,6 +1,6 @@
 .{
     .name = .asconv,
-    .version = "0.5.1",
+    .version = "0.5.2",
     .fingerprint = 0xe418a193eb31c225,
     .minimum_zig_version = "0.15.1",
 
@@ -12,6 +12,10 @@
         .stb = .{
             .url = "git+https://github.com/nothings/stb.git?ref=master#f58f558c120e9b32c217290b80bad1a0729fbb2c",
             .hash = "N-V-__8AAO8tTgBJoAbyWoWhdnNsGrx_ql6PT0ZLfoz2ms6b",
+        },
+        .zcli = .{
+            .url = "git+https://github.com/lepton9/zcli#189e9be6b8f94634093763a4430adb4bf1644d53",
+            .hash = "zcli-0.2.2-Of3s8eYPAQDfXYaEZh7nXFPLsbz7G59cIfjpcY9inUgm",
         },
     },
 

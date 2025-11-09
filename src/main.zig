@@ -1,49 +1,7 @@
 const std = @import("std");
 const result = @import("result");
 const exec = @import("exec");
-const cli = @import("cli");
-const cmd = cli.cmd;
-const arg = cli.arg;
-
-fn handle_cli(allocator: std.mem.Allocator, cli_result: cli.ResultCli) ?*cli.Cli {
-    return cli_result.unwrap_try() catch {
-        const err = cli_result.unwrap_err();
-        defer err.deinit(allocator);
-        switch (err.err) {
-            cli.ArgsError.UnknownCommand => {
-                std.log.err("Unknown command: '{s}'", .{err.get_ctx()});
-            },
-            cli.ArgsError.UnknownOption => {
-                std.log.err("Unknown option: '{s}'\n", .{err.get_ctx()});
-            },
-            cli.ArgsError.NoCommand => {
-                std.log.err("No command given\n", .{});
-            },
-            cli.ArgsError.NoGlobalArgs => {
-                std.log.err("No global arguments\n", .{});
-            },
-            cli.ArgsError.NoOptionValue => {
-                std.log.err("No option value for option '{s}'\n", .{err.get_ctx()});
-            },
-            cli.ArgsError.OptionHasNoArg => {
-                std.log.err("Option doesn't take any arguments '{s}'\n", .{err.get_ctx()});
-            },
-            cli.ArgsError.NoRequiredOption => {
-                std.log.err("Required options not given: {s}\n", .{err.get_ctx()});
-            },
-            cli.ArgsError.TooManyArgs => {
-                std.log.err("Too many arguments: '{s}'\n", .{err.get_ctx()});
-            },
-            cli.ArgsError.DuplicateOption => {
-                std.log.err("Duplicate option: '{s}'\n", .{err.get_ctx()});
-            },
-            else => {
-                std.log.err("Error\n", .{});
-            },
-        }
-        return null;
-    };
-}
+const zcli = @import("zcli");
 
 fn handle_exec_error(allocator: std.mem.Allocator, err: result.ErrorWrap) void {
     defer err.deinit(allocator);
@@ -74,6 +32,9 @@ fn handle_exec_error(allocator: std.mem.Allocator, err: result.ErrorWrap) void {
         },
         exec.ExecError.DuplicateInput => {
             std.log.err("Multiple input files '{s}'", .{err.get_ctx()});
+        },
+        exec.ExecError.NoCommand => {
+            std.log.err("No subcommand given", .{});
         },
         exec.ExecError.NoInput => {
             std.log.err("No input given", .{});
@@ -116,26 +77,26 @@ fn handle_exec_error(allocator: std.mem.Allocator, err: result.ErrorWrap) void {
 
 pub fn main() !u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var alloc = gpa.allocator();
+    const allocator = gpa.allocator();
 
-    const app = comptime cmd.ArgsStructure{
-        .cmd_required = false,
+    const app = comptime zcli.CliApp{
+        .config = .{
+            .name = exec.build_options.PROGRAM_NAME,
+            .cmd_required = false,
+            .auto_help = true,
+            .auto_version = true,
+        },
         .commands = &exec.commands,
         .options = &exec.options,
+        .positionals = &exec.positionals,
     };
 
-    var args_str = try std.process.argsAlloc(alloc);
-    defer std.process.argsFree(alloc, args_str);
-    const args = try arg.parse_args(alloc, args_str[1..]);
-    defer alloc.free(args);
+    const cli: *zcli.Cli = try zcli.parse_args(allocator, &app);
+    defer cli.deinit(allocator);
 
-    const cli_result = try cli.validate_parsed_args(alloc, args, &app);
-    var cli_ = handle_cli(alloc, cli_result) orelse return 1;
-    defer cli_.deinit(alloc);
-
-    const err = try exec.cmd_func(alloc, cli_, &app);
+    const err = try exec.cmd_func(allocator, cli);
     if (err) |e| {
-        handle_exec_error(alloc, e);
+        handle_exec_error(allocator, e);
         return 1;
     }
     return 0;

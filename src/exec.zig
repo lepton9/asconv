@@ -1,6 +1,5 @@
 const std = @import("std");
-const cli = @import("cli");
-const cmd = cli.cmd;
+const zcli = @import("zcli");
 const result = @import("result");
 const corelib = @import("core");
 const image = @import("img");
@@ -15,10 +14,10 @@ const ImageRaw = image.ImageRaw;
 
 pub const build_options = @import("build_options");
 const enable_video = build_options.video;
-const version = build_options.version;
 
 pub const commands = usage.commands;
 pub const options = usage.options;
+pub const positionals = usage.positionals;
 
 pub const ResultImage = result.Result(ImageRaw, result.ErrorWrap);
 
@@ -32,6 +31,7 @@ pub const ExecError = error{
     ParseErrorSigma,
     ParseErrorFps,
     DuplicateInput,
+    NoCommand,
     NoInput,
     InvalidInput,
     NoAlgorithmFound,
@@ -44,22 +44,33 @@ pub const ExecError = error{
     VideoBuildOptionNotSet,
 };
 
-fn get_input(cli_: *cli.Cli) ![]const u8 {
+fn get_input_result(
+    allocator: std.mem.Allocator,
+    cli: *zcli.Cli,
+) result.Result([]const u8, result.ErrorWrap) {
+    const result_type: type = result.Result([]const u8, result.ErrorWrap);
     var input: ?[]const u8 = null;
-    if (cli_.find_opt("input")) |opt_input| {
-        input = opt_input.arg.?.value;
+    if (cli.find_opt("input")) |opt_input| {
+        input = opt_input.value.?.string;
     }
-    if (cli_.global_args) |ga| {
-        if (input) |_| return ExecError.DuplicateInput;
-        input = ga;
+    if (cli.find_positional("input")) |pos| {
+        if (input) |_| return result_type.wrap_err(result.ErrorWrap.create(
+            allocator,
+            ExecError.DuplicateInput,
+            "{s}",
+            .{pos.value},
+        ));
+        input = pos.value;
     }
-    return input orelse ExecError.NoInput;
+    return if (input) |i| result_type.wrap_ok(i) else result_type.wrap_err(
+        result.ErrorWrap.create(allocator, ExecError.NoInput, "", .{}),
+    );
 }
 
-fn output_path(cli_: *cli.Cli) ?[]const u8 {
-    const option = cli_.find_opt("out");
+fn output_path(cli: *zcli.Cli) ?[]const u8 {
+    const option = cli.find_opt("out");
     if (option) |opt| {
-        return opt.arg.?.value.?;
+        return opt.value.?.string;
     }
     return null;
 }
@@ -138,10 +149,9 @@ fn get_input_image(allocator: std.mem.Allocator, filepath: []const u8) ResultIma
     }
 }
 
-fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
-    const filename = get_input(cli_) catch |err| {
-        return result.ErrorWrap.create(allocator, err, "{s}", .{cli_.global_args orelse ""});
-    };
+fn size(allocator: std.mem.Allocator, cli: *zcli.Cli) !?result.ErrorWrap {
+    const res = get_input_result(allocator, cli);
+    const filename = res.unwrap_try() catch return res.unwrap_err();
     const img = try Image.init(allocator, 0, 0);
     img.core = try corelib.Core.init(allocator);
     defer Image.deinit(img);
@@ -168,10 +178,9 @@ fn size(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
     return null;
 }
 
-fn playback(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
-    const input_dir = get_input(cli_) catch |err| {
-        return result.ErrorWrap.create(allocator, err, "{s}", .{cli_.global_args orelse ""});
-    };
+fn playback(allocator: std.mem.Allocator, cli: *zcli.Cli) !?result.ErrorWrap {
+    const res = get_input_result(allocator, cli);
+    const input_dir = res.unwrap_try() catch return res.unwrap_err();
     const cwd = std.fs.cwd();
 
     const dir = cwd.openDir(input_dir, .{ .iterate = true }) catch {
@@ -180,7 +189,7 @@ fn playback(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
 
     var core = try corelib.Core.init(allocator);
     defer core.deinit(allocator);
-    if (try ascii_opts(allocator, cli_, core)) |err| {
+    if (try ascii_opts(allocator, cli, core)) |err| {
         return err;
     }
 
@@ -253,7 +262,7 @@ fn playback(allocator: std.mem.Allocator, cli_: *cli.Cli) !?result.ErrorWrap {
 
 fn ascii_video(
     allocator: std.mem.Allocator,
-    cli_: *cli.Cli,
+    cli: *zcli.Cli,
     core: *corelib.Core,
     filename: []const u8,
 ) !?result.ErrorWrap {
@@ -264,18 +273,18 @@ fn ascii_video(
         .{"video"},
     );
 
-    if (try ascii_opts(allocator, cli_, core)) |err| {
+    if (try ascii_opts(allocator, cli, core)) |err| {
         return err;
     }
-    const progress = (cli_.find_opt("progress") != null);
-    const output = output_path(cli_);
+    const progress = (cli.find_opt("progress") != null);
+    const output = output_path(cli);
     try @import("video").process_video(allocator, core, filename, output, progress);
     return null;
 }
 
 fn ascii_image(
     allocator: std.mem.Allocator,
-    cli_: *cli.Cli,
+    cli: *zcli.Cli,
     core: *corelib.Core,
     filename: []const u8,
 ) !?result.ErrorWrap {
@@ -286,7 +295,7 @@ fn ascii_image(
         return img_result.unwrap_err();
     };
 
-    if (try ascii_opts(allocator, cli_, core)) |err| {
+    if (try ascii_opts(allocator, cli, core)) |err| {
         raw_image.deinit();
         return err;
     }
@@ -304,7 +313,7 @@ fn ascii_image(
 
     const data = try img.to_ascii();
     defer allocator.free(data);
-    const file = output_path(cli_);
+    const file = output_path(cli);
     var timer_print = try time.Timer.start(&core.stats.write);
     if (file) |path| {
         try write_to_file(path, data);
@@ -315,24 +324,24 @@ fn ascii_image(
     return null;
 }
 
-fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli, file_type: corelib.MediaType) !?result.ErrorWrap {
+fn ascii(allocator: std.mem.Allocator, cli: *zcli.Cli, file_type: corelib.MediaType) !?result.ErrorWrap {
     var core = try corelib.Core.init(allocator);
     defer core.deinit(allocator);
     var timer_total = try time.Timer.start(&core.stats.total);
-    const filename = get_input(cli_) catch |err| {
-        return result.ErrorWrap.create(allocator, err, "{s}", .{cli_.global_args orelse ""});
-    };
+    const res = get_input_result(allocator, cli);
+    const filename = res.unwrap_try() catch return res.unwrap_err();
+
     try core.set_ascii_info(allocator, usage.characters);
     switch (file_type) {
         .Video => {
-            if (try ascii_video(allocator, cli_, core, filename)) |err| return err;
+            if (try ascii_video(allocator, cli, core, filename)) |err| return err;
         },
         else => {
-            if (try ascii_image(allocator, cli_, core, filename)) |err| return err;
+            if (try ascii_image(allocator, cli, core, filename)) |err| return err;
         },
     }
     timer_total.stop();
-    if (cli_.find_opt("time")) |_| {
+    if (cli.find_opt("time")) |_| {
         try show_performance(allocator, &core.stats, file_type);
     }
     return null;
@@ -340,12 +349,12 @@ fn ascii(allocator: std.mem.Allocator, cli_: *cli.Cli, file_type: corelib.MediaT
 
 fn ascii_opts(
     allocator: std.mem.Allocator,
-    cli_: *cli.Cli,
+    cli: *zcli.Cli,
     core: *corelib.Core,
 ) !?result.ErrorWrap {
     const config_path: ?[]const u8 = blk: {
-        if (cli_.find_opt("config")) |opt| {
-            break :blk opt.arg.?.value.?;
+        if (cli.find_opt("config")) |opt| {
+            break :blk opt.value.?.string;
         }
         break :blk null;
     };
@@ -358,69 +367,73 @@ fn ascii_opts(
         } else break :blk try config.get_config(allocator);
     };
     defer if (conf) |c| c.deinit(allocator);
-    if (cli_.args == null) return null;
+    if (cli.args.count() == 0) return null;
 
-    for (cli_.args.?.items) |*opt| {
-        if (std.mem.eql(u8, opt.long_name, "height")) {
-            core.height = std.fmt.parseInt(u32, opt.arg.?.value.?, 10) catch {
-                return result.ErrorWrap.create(allocator, ExecError.ParseErrorHeight, "{s}", .{opt.arg.?.value.?});
+    var opt_it = cli.args.iterator();
+    while (opt_it.next()) |entry| {
+        const opt = entry.value_ptr.*;
+        if (std.mem.eql(u8, opt.name, "height")) {
+            core.height = std.fmt.parseInt(u32, opt.value.?.string, 10) catch {
+                return result.ErrorWrap.create(allocator, ExecError.ParseErrorHeight, "{s}", .{opt.value.?.string});
             };
-        } else if (std.mem.eql(u8, opt.long_name, "width")) {
-            core.width = std.fmt.parseInt(u32, opt.arg.?.value.?, 10) catch {
-                return result.ErrorWrap.create(allocator, ExecError.ParseErrorWidth, "{s}", .{opt.arg.?.value.?});
+        } else if (std.mem.eql(u8, opt.name, "width")) {
+            core.width = std.fmt.parseInt(u32, opt.value.?.string, 10) catch {
+                return result.ErrorWrap.create(allocator, ExecError.ParseErrorWidth, "{s}", .{opt.value.?.string});
             };
-        } else if (std.mem.eql(u8, opt.long_name, "scale")) {
-            core.scale = std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {
-                return result.ErrorWrap.create(allocator, ExecError.ParseErrorScale, "{s}", .{opt.arg.?.value.?});
+        } else if (std.mem.eql(u8, opt.name, "scale")) {
+            core.scale = std.fmt.parseFloat(f32, opt.value.?.string) catch {
+                return result.ErrorWrap.create(allocator, ExecError.ParseErrorScale, "{s}", .{opt.value.?.string});
             };
-        } else if (std.mem.eql(u8, opt.long_name, "fit")) {
+        } else if (std.mem.eql(u8, opt.name, "fit")) {
             core.fit_screen = true;
-        } else if (std.mem.eql(u8, opt.long_name, "brightness")) {
-            core.brightness = std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {
-                return result.ErrorWrap.create(allocator, ExecError.ParseErrorBrightness, "{s}", .{opt.arg.?.value.?});
+        } else if (std.mem.eql(u8, opt.name, "brightness")) {
+            core.brightness = std.fmt.parseFloat(f32, opt.value.?.string) catch {
+                return result.ErrorWrap.create(allocator, ExecError.ParseErrorBrightness, "{s}", .{opt.value.?.string});
             };
-        } else if (std.mem.eql(u8, opt.long_name, "fps")) {
-            core.fps = std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {
-                return result.ErrorWrap.create(allocator, ExecError.ParseErrorFps, "{s}", .{opt.arg.?.value.?});
+        } else if (std.mem.eql(u8, opt.name, "fps")) {
+            core.fps = std.fmt.parseFloat(f32, opt.value.?.string) catch {
+                return result.ErrorWrap.create(allocator, ExecError.ParseErrorFps, "{s}", .{opt.value.?.string});
             };
-        } else if (std.mem.eql(u8, opt.long_name, "loop")) {
+        } else if (std.mem.eql(u8, opt.name, "loop")) {
             core.loop = true;
-        } else if (std.mem.eql(u8, opt.long_name, "reverse")) {
+        } else if (std.mem.eql(u8, opt.name, "reverse")) {
             try core.ascii_info.reverse(allocator);
-        } else if (std.mem.eql(u8, opt.long_name, "charset")) {
-            try core.set_ascii_info(allocator, opt.arg.?.value.?);
-        } else if (std.mem.eql(u8, opt.long_name, "color")) {
+        } else if (std.mem.eql(u8, opt.name, "charset")) {
+            try core.set_ascii_info(allocator, opt.value.?.string);
+        } else if (std.mem.eql(u8, opt.name, "color")) {
             core.toggle_color();
-            if (opt.arg.?.value) |val| {
-                core.set_color_mode(val) catch {
-                    return result.ErrorWrap.create(allocator, ExecError.NoColorModeFound, "{s}", .{val});
+            if (opt.value) |val| {
+                const value = val.string;
+                core.set_color_mode(value) catch {
+                    return result.ErrorWrap.create(allocator, ExecError.NoColorModeFound, "{s}", .{value});
                 };
             }
-        } else if (std.mem.eql(u8, opt.long_name, "edges")) {
+        } else if (std.mem.eql(u8, opt.name, "edges")) {
             core.edge_detection = true;
-            if (opt.arg.?.value) |val| {
-                core.set_edge_alg(val) catch {
-                    return result.ErrorWrap.create(allocator, ExecError.NoAlgorithmFound, "{s}", .{val});
+            if (opt.value) |val| {
+                const value = val.string;
+                core.set_edge_alg(value) catch {
+                    return result.ErrorWrap.create(allocator, ExecError.NoAlgorithmFound, "{s}", .{value});
                 };
             }
-        } else if (std.mem.eql(u8, opt.long_name, "sigma")) {
+        } else if (std.mem.eql(u8, opt.name, "sigma")) {
             core.set_sigma(
-                std.fmt.parseFloat(f32, opt.arg.?.value.?) catch {
-                    return result.ErrorWrap.create(allocator, ExecError.ParseErrorSigma, "{s}", .{opt.arg.?.value.?});
+                std.fmt.parseFloat(f32, opt.value.?.string) catch {
+                    return result.ErrorWrap.create(allocator, ExecError.ParseErrorSigma, "{s}", .{opt.value.?.string});
                 },
             );
-        } else if (std.mem.eql(u8, opt.long_name, "ccharset")) {
+        } else if (std.mem.eql(u8, opt.name, "ccharset")) {
             if (conf) |c| {
                 const charsets = c.table.get_table().get("charsets");
                 if (charsets == null or charsets.? != .table)
                     return result.ErrorWrap.create(allocator, ExecError.NoConfigTable, "charsets", .{});
-                const cs = charsets.?.get(opt.arg.?.value.?);
+                const cs = charsets.?.get(opt.value.?.string);
                 if (cs == null or cs.? != .string)
                     return result.ErrorWrap.create(
                         allocator,
                         ExecError.NoConfigCharset,
                         "{s}",
-                        .{opt.arg.?.value.?},
+                        .{opt.value.?.string},
                     );
                 try core.set_ascii_info(allocator, cs.?.string);
             } else {
@@ -431,7 +444,7 @@ fn ascii_opts(
                     .{config_path orelse "default_path"},
                 );
             }
-        } else if (std.mem.eql(u8, opt.long_name, "dropframes")) {
+        } else if (std.mem.eql(u8, opt.name, "dropframes")) {
             core.drop_frames = true;
         }
     }
@@ -527,42 +540,24 @@ fn show_performance(
     try write_to_stdio(buffer.items);
 }
 
-fn help(allocator: std.mem.Allocator, args_struct: *const cmd.ArgsStructure) !void {
-    var buf = try std.ArrayList(u8).initCapacity(allocator, 1024);
-    defer buf.deinit(allocator);
-    try buf.appendSlice(allocator, "Usage: asconv [command] [options]\n\n");
-    const args = try args_struct.args_structure_string(allocator);
-    defer allocator.free(args);
-    try buf.appendSlice(allocator, args);
-    try write_to_stdio(buf.items);
-}
-
-pub fn cmd_func(allocator: std.mem.Allocator, cli_: *cli.Cli, args_struct: *const cmd.ArgsStructure) !?result.ErrorWrap {
-    if (cli_.find_opt("version")) |_| {
-        try write_to_stdio(version);
-        return null;
+pub fn cmd_func(
+    allocator: std.mem.Allocator,
+    cli: *zcli.Cli,
+) !?result.ErrorWrap {
+    if (cli.cmd == null) {
+        return result.ErrorWrap.create(allocator, ExecError.NoCommand, "", .{});
     }
-    if (cli_.find_opt("help")) |_| {
-        try help(allocator, args_struct);
-        return null;
-    }
-    if (cli_.cmd == null) {
-        std.log.info("No command", .{});
-        return null;
-    }
-    const cmd_name = cli_.cmd.?.name;
+    const cmd_name = cli.cmd.?.name;
     if (std.mem.eql(u8, cmd_name, "size")) {
-        return try size(allocator, cli_);
+        return try size(allocator, cli);
     } else if (std.mem.eql(u8, cmd_name, "ascii")) {
-        return try ascii(allocator, cli_, .Image);
+        return try ascii(allocator, cli, .Image);
     } else if (std.mem.eql(u8, cmd_name, "asciivid")) {
-        return try ascii(allocator, cli_, .Video);
+        return try ascii(allocator, cli, .Video);
     } else if (std.mem.eql(u8, cmd_name, "playback")) {
-        return try playback(allocator, cli_);
+        return try playback(allocator, cli);
     } else if (std.mem.eql(u8, cmd_name, "compress")) {
         return null;
-    } else if (std.mem.eql(u8, cmd_name, "help")) {
-        try help(allocator, args_struct);
     }
     return null;
 }

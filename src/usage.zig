@@ -1,6 +1,7 @@
-const cli = @import("cli");
-const Cmd = cli.Cmd;
-const Option = cli.Option;
+const zcli = @import("zcli");
+const Cmd = zcli.Cmd;
+const Opt = zcli.Opt;
+const PosArg = zcli.PosArg;
 
 pub const characters = " .-:=+iltIcsv1x%7aejorzfnuCJT3*69LYpqy25SbdgFGOVXkPhmw48AQDEHKUZR@B#NW0M";
 
@@ -25,19 +26,9 @@ pub const commands = [_]Cmd{
         .desc = "Show size of the image",
         .options = null,
     },
-    // .{
-    //     .name = "compress",
-    //     .desc = "Compress image",
-    //     .options = null,
-    // },
-    .{
-        .name = "help",
-        .desc = "Print help",
-        .options = null,
-    },
 };
 
-pub const options = [_]Option{
+pub const options = [_]Opt{
     .{
         .long_name = "input",
         .short_name = "i",
@@ -104,23 +95,23 @@ pub const options = [_]Option{
     .{
         .long_name = "color",
         .short_name = "c",
-        .desc = "Output with ANSI colors and set color range (default: color256)",
+        .desc = "Output with ANSI colors and set color range",
         .required = false,
-        .arg = .{ .name = "color256|truecolor", .required = false },
+        .arg = .{ .name = "color256|truecolor", .default = "color256", .required = false },
     },
     .{
         .long_name = "edges",
         .short_name = "e",
-        .desc = "Turn on edge detection and set algorithm (default: sobel)",
+        .desc = "Turn on edge detection and set algorithm",
         .required = false,
-        .arg = .{ .name = "sobel|LoG|DoG", .required = false },
+        .arg = .{ .name = "sobel|LoG|DoG", .default = "sobel", .required = false },
     },
     .{
         .long_name = "sigma",
         .short_name = null,
-        .desc = "Sigma value for DoG and LoG (default: 1.0)",
+        .desc = "Sigma value for DoG and LoG",
         .required = false,
-        .arg = .{ .name = "float" },
+        .arg = .{ .name = "float", .default = "1.0" },
     },
     .{
         .long_name = "time",
@@ -173,50 +164,16 @@ pub const options = [_]Option{
     },
     .{
         .long_name = "version",
-        .short_name = "v",
-        .desc = "Print version number",
-        .required = false,
-        .arg = null,
+        .short_name = "V",
+        .desc = "Print version",
     },
     .{
         .long_name = "help",
         .short_name = "h",
         .desc = "Print help",
-        .required = false,
-        .arg = null,
     },
 };
 
-fn validate_options(comptime opts: []const Option) void {
-    const std = @import("std");
-    inline for (opts, 0..) |opt_i, i| {
-        inline for (opts[(i + 1)..]) |opt_j| {
-            if (std.mem.eql(u8, opt_i.long_name, opt_j.long_name)) {
-                @compileError("Duplicate long option name: " ++ opt_i.long_name);
-            }
-            if (opt_i.short_name) |sn_i| {
-                if (opt_j.short_name) |sn_j| {
-                    if (std.mem.eql(u8, sn_i, sn_j)) {
-                        @compileError("Duplicate short option name: " ++ sn_i);
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn validate_commands(comptime cmds: []const Cmd) void {
-    const std = @import("std");
-    inline for (cmds, 0..) |cmd_i, i| {
-        inline for (cmds[(i + 1)..]) |cmd_j| {
-            if (std.mem.eql(u8, cmd_i.name, cmd_j.name)) {
-                @compileError("Duplicate command name: " ++ cmd_i.name.?);
-            }
-        }
-    }
-}
-
-comptime {
-    validate_options(&options);
-    validate_commands(&commands);
-}
+pub const positionals = [_]PosArg{
+    .{ .name = "input", .required = false },
+};

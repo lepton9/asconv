@@ -11,7 +11,7 @@ pub fn build(b: *std.Build) void {
     const CFlags = &[_][]const u8{"-fPIC"};
     const options = b.addOptions();
 
-    options.addOption([]const u8, "version", zon.version);
+    options.addOption([]const u8, "PROGRAM_NAME", @tagName(zon.name));
 
     const enable_video = b.option(
         bool,
@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) void {
         "ffmpeg",
         "Set path to ffmpeg libraries",
     );
-    options.addOption(bool, "ffmpeg", enable_video);
+    options.addOption(?[]const u8, "ffmpeg", ffmpeg_dir);
 
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
@@ -57,16 +57,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exec_mod.addImport("usage", usage_mod);
-
-    // Cli
-    const cli_mod = b.createModule(.{
-        .root_source_file = b.path("src/cli.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    exe_mod.addImport("cli", cli_mod);
-    exec_mod.addImport("cli", cli_mod);
-    usage_mod.addImport("cli", cli_mod);
 
     // Core
     const core_mod = b.addModule("core", .{
@@ -118,7 +108,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    cli_mod.addImport("result", result_mod);
     exe_mod.addImport("result", result_mod);
     exec_mod.addImport("result", result_mod);
 
@@ -131,7 +120,6 @@ pub fn build(b: *std.Build) void {
     core_mod.addImport("utils", utils_mod);
     exe_mod.addImport("utils", utils_mod);
     exec_mod.addImport("utils", utils_mod);
-    cli_mod.addImport("utils", utils_mod);
 
     // Stb
     const stb_mod = b.addModule("stb", .{
@@ -162,6 +150,14 @@ pub fn build(b: *std.Build) void {
     const toml_mod = toml.module("toml");
     config_mod.addImport("toml", toml_mod);
 
+    // Zcli
+    const zcli = b.dependency("zcli", .{ .target = target, .optimize = optimize });
+    const zcli_mod = zcli.module("zcli");
+    @import("zcli").add_version_info(b, zcli_mod, zon.version);
+    exe_mod.addImport("zcli", zcli_mod);
+    exec_mod.addImport("zcli", zcli_mod);
+    usage_mod.addImport("zcli", zcli_mod);
+
     // Build executable
     const exe = b.addExecutable(.{
         .name = "asconv",
@@ -180,8 +176,8 @@ pub fn build(b: *std.Build) void {
             .target = target,
         }),
     });
-    tests.root_module.addImport("cli", cli_mod);
     tests.root_module.addImport("exec", exec_mod);
+    tests.root_module.addImport("zcli", zcli_mod);
     const run_test_cmd = b.addRunArtifact(tests);
     run_test_cmd.step.dependOn(b.getInstallStep());
 
