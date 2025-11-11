@@ -24,7 +24,7 @@ test "sobel" {
     };
     const cli = try zcli.parse_from(alloc, &app, &args);
     defer cli.deinit(alloc);
-    if (try exec.cmd_func(alloc, cli)) |err| {
+    if (try exec.cmd_func(alloc, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
     }
     try std.fs.cwd().deleteFile(output);
@@ -44,7 +44,7 @@ test "dog" {
     };
     const cli = try zcli.parse_from(alloc, &app, &args);
     defer cli.deinit(alloc);
-    if (try exec.cmd_func(alloc, cli)) |err| {
+    if (try exec.cmd_func(alloc, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
     }
     try std.fs.cwd().deleteFile(output);
@@ -64,7 +64,7 @@ test "log" {
     };
     const cli = try zcli.parse_from(alloc, &app, &args);
     defer cli.deinit(alloc);
-    if (try exec.cmd_func(alloc, cli)) |err| {
+    if (try exec.cmd_func(alloc, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
     }
     try std.fs.cwd().deleteFile(output);
@@ -83,7 +83,7 @@ test "color" {
     };
     const cli = try zcli.parse_from(alloc, &app, &args);
     defer cli.deinit(alloc);
-    if (try exec.cmd_func(alloc, cli)) |err| {
+    if (try exec.cmd_func(alloc, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
     }
     try std.fs.cwd().deleteFile(output);
@@ -103,7 +103,7 @@ test "charset" {
     };
     const cli = try zcli.parse_from(alloc, &app, &args);
     defer cli.deinit(alloc);
-    if (try exec.cmd_func(alloc, cli)) |err| {
+    if (try exec.cmd_func(alloc, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
     }
     try std.fs.cwd().deleteFile(output);

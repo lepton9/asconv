@@ -46,6 +46,7 @@ ascii                                    Convert image to ascii
 asciivid                                 Convert video to ascii
 playback                                 Play converted ascii video
 size                                     Show size of the image
+gen-completion                           Generate shell completion script [bash|zsh|fish]
 ```
 
 ### Options

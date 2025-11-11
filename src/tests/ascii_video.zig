@@ -27,7 +27,7 @@ test "video" {
     };
     const cli = try zcli.parse_from(alloc, &app, &args);
     defer cli.deinit(alloc);
-    if (try exec.cmd_func(alloc, cli)) |err| {
+    if (try exec.cmd_func(alloc, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
     }
     try cwd.deleteTree(output);

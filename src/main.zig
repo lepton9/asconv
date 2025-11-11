@@ -45,6 +45,9 @@ fn handle_exec_error(gpa: std.mem.Allocator, err: result.ErrorWrap) u8 {
         exec.ExecError.NoConfigCharset => {
             std.log.err("No charset in config with key '{s}'", .{err.get_ctx()});
         },
+        exec.ExecError.UnsupportedShell => {
+            std.log.err("Unsupported shell '{s}'", .{err.get_ctx()});
+        },
         exec.ExecError.VideoBuildOptionNotSet => {
             std.log.err(
                 "Build option '-Dvideo' is not set. Video support disabled",
@@ -62,7 +65,7 @@ pub fn main() !u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    const app = comptime zcli.CliApp{
+    const cli_spec = comptime zcli.CliApp{
         .config = .{
             .name = exec.build_options.PROGRAM_NAME,
             .cmd_required = false,
@@ -74,10 +77,10 @@ pub fn main() !u8 {
         .positionals = &exec.positionals,
     };
 
-    const cli: *zcli.Cli = try zcli.parse_args(allocator, &app);
+    const cli: *zcli.Cli = try zcli.parse_args(allocator, &cli_spec);
     defer cli.deinit(allocator);
 
-    const err = try exec.cmd_func(allocator, cli);
+    const err = try exec.cmd_func(allocator, cli, &cli_spec);
     if (err) |e| return handle_exec_error(allocator, e);
     return 0;
 }

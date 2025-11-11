@@ -26,6 +26,13 @@ pub const commands = [_]Cmd{
         .desc = "Show size of the image",
         .options = null,
     },
+    .{
+        .name = "gen-completion",
+        .desc = "Generate shell completion script [bash|zsh|fish]",
+        .positionals = &[_]PosArg{
+            .{ .name = "shell", .desc = "Shell name", .required = true },
+        },
+    },
 };
 
 pub const options = [_]Opt{

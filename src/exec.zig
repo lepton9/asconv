@@ -36,6 +36,7 @@ pub const ExecError = error{
     NoConfigCharset,
     FetchError,
     InvalidUrl,
+    UnsupportedShell,
     VideoBuildOptionNotSet,
 };
 
@@ -329,7 +330,11 @@ fn ascii_image(
     return null;
 }
 
-fn ascii(allocator: std.mem.Allocator, cli: *zcli.Cli, file_type: corelib.MediaType) !?ErrorWrap {
+fn ascii(
+    allocator: std.mem.Allocator,
+    cli: *zcli.Cli,
+    file_type: corelib.MediaType,
+) !?ErrorWrap {
     var core = try corelib.Core.init(allocator);
     defer core.deinit(allocator);
     var timer_total = try time.Timer.start(&core.stats.total);
@@ -531,24 +536,53 @@ fn show_performance(
     try write_to_stdio(buffer.items);
 }
 
-pub fn cmd_func(
-    allocator: std.mem.Allocator,
+fn generate_completion(
+    gpa: std.mem.Allocator,
     cli: *zcli.Cli,
+    comptime cli_spec: *const zcli.CliApp,
+) !?ErrorWrap {
+    var buf: [8096]u8 = undefined;
+    const shell = cli.find_positional("shell") orelse
+        return ErrorWrap.create(error.NoShellArgument);
+    const script = zcli.complete.getCompletion(
+        &buf,
+        cli_spec,
+        cli_spec.config.name.?,
+        shell.value,
+    ) catch |err| return switch (err) {
+        error.UnsupportedShell => ErrorWrap.create_ctx(
+            gpa,
+            ExecError.UnsupportedShell,
+            "{s}",
+            .{shell.value},
+        ),
+        else => err,
+    };
+    try write_to_stdio(script);
+    return null;
+}
+
+pub fn cmd_func(
+    gpa: std.mem.Allocator,
+    cli: *zcli.Cli,
+    comptime cli_spec: *const zcli.CliApp,
 ) !?ErrorWrap {
     if (cli.cmd == null) {
         return ErrorWrap.create(ExecError.NoCommand);
     }
     const cmd_name = cli.cmd.?.name;
     if (std.mem.eql(u8, cmd_name, "size")) {
-        return try size(allocator, cli);
+        return try size(gpa, cli);
     } else if (std.mem.eql(u8, cmd_name, "ascii")) {
-        return try ascii(allocator, cli, .Image);
+        return try ascii(gpa, cli, .Image);
     } else if (std.mem.eql(u8, cmd_name, "asciivid")) {
-        return try ascii(allocator, cli, .Video);
+        return try ascii(gpa, cli, .Video);
     } else if (std.mem.eql(u8, cmd_name, "playback")) {
-        return try playback(allocator, cli);
+        return try playback(gpa, cli);
     } else if (std.mem.eql(u8, cmd_name, "compress")) {
         return null;
+    } else if (std.mem.eql(u8, cmd_name, "gen-completion")) {
+        return try generate_completion(gpa, cli, cli_spec);
     }
     return null;
 }
