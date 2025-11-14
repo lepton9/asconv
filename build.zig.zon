@@ -10,8 +10,8 @@
             .hash = "toml-0.3.2-YDcxkrdYAQB8b9k1q_sp51jt2ymgGLmOX_BD4kQi53Eo",
         },
         .zcli = .{
-            .url = "git+https://github.com/lepton9/zcli#a5931cf8c9dc03e397a0438797347352395d1470",
-            .hash = "zcli-0.2.3-Of3s8VgYAQBqgusIaoqaHHUAPB54SBgpn5yJLHLi7NRf",
+            .url = "git+https://github.com/lepton9/zcli#468bd93239c3b75dc7d74729b215c45dc15045b7",
+            .hash = "zcli-0.3.1-Of3s8a03AQDfOik6OQmeyspg8JLzE1t3mqmsXPymNm6t",
         },
         .stb = .{
             .url = "git+https://github.com/nothings/stb.git?ref=master#f58f558c120e9b32c217290b80bad1a0729fbb2c",

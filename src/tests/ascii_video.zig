@@ -25,7 +25,7 @@ test "video" {
         @constCast("--edges=sobel"),
         @constCast(test_input),
     };
-    const cli = try zcli.parse_from(alloc, &app, &args);
+    const cli = try zcli.parseFrom(alloc, &app, &args);
     defer cli.deinit(alloc);
     if (try exec.cmd_func(alloc, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});

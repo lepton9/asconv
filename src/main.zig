@@ -71,13 +71,14 @@ pub fn main() !u8 {
             .cmd_required = false,
             .auto_help = true,
             .auto_version = true,
+            .help_max_width = 100,
         },
         .commands = &exec.commands,
         .options = &exec.options,
         .positionals = &exec.positionals,
     };
 
-    const cli: *zcli.Cli = try zcli.parse_args(allocator, &cli_spec);
+    const cli: *zcli.Cli = try zcli.parseArgs(allocator, &cli_spec);
     defer cli.deinit(allocator);
 
     const err = try exec.cmd_func(allocator, cli, &cli_spec);

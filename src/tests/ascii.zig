@@ -22,7 +22,7 @@ test "sobel" {
         @constCast("--edges=sobel"),
         @constCast(test_image),
     };
-    const cli = try zcli.parse_from(alloc, &app, &args);
+    const cli = try zcli.parseFrom(alloc, &app, &args);
     defer cli.deinit(alloc);
     if (try exec.cmd_func(alloc, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
@@ -42,7 +42,7 @@ test "dog" {
         @constCast("--sigma=1.0"),
         @constCast(test_image),
     };
-    const cli = try zcli.parse_from(alloc, &app, &args);
+    const cli = try zcli.parseFrom(alloc, &app, &args);
     defer cli.deinit(alloc);
     if (try exec.cmd_func(alloc, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
@@ -62,7 +62,7 @@ test "log" {
         @constCast("--sigma=1.0"),
         @constCast(test_image),
     };
-    const cli = try zcli.parse_from(alloc, &app, &args);
+    const cli = try zcli.parseFrom(alloc, &app, &args);
     defer cli.deinit(alloc);
     if (try exec.cmd_func(alloc, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
@@ -81,7 +81,7 @@ test "color" {
         @constCast("--color=color256"),
         @constCast(test_image),
     };
-    const cli = try zcli.parse_from(alloc, &app, &args);
+    const cli = try zcli.parseFrom(alloc, &app, &args);
     defer cli.deinit(alloc);
     if (try exec.cmd_func(alloc, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
@@ -101,7 +101,7 @@ test "charset" {
         @constCast("--reverse"),
         @constCast(test_image),
     };
-    const cli = try zcli.parse_from(alloc, &app, &args);
+    const cli = try zcli.parseFrom(alloc, &app, &args);
     defer cli.deinit(alloc);
     if (try exec.cmd_func(alloc, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});

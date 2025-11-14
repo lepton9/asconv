@@ -153,7 +153,7 @@ pub fn build(b: *std.Build) void {
     // Zcli
     const zcli = b.dependency("zcli", .{ .target = target, .optimize = optimize });
     const zcli_mod = zcli.module("zcli");
-    @import("zcli").add_version_info(b, zcli_mod, zon.version);
+    @import("zcli").addVersionInfo(b, zcli_mod, zon.version);
     exe_mod.addImport("zcli", zcli_mod);
     exec_mod.addImport("zcli", zcli_mod);
     usage_mod.addImport("zcli", zcli_mod);
