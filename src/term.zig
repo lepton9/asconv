@@ -16,8 +16,9 @@ pub fn get_term_size() !TermSize {
 fn term_size_linux() !TermSize {
     const posix = std.posix;
     var ws: posix.winsize = undefined;
+
     const err = posix.system.ioctl(
-        std.fs.File.stdout().handle,
+        std.Io.File.stdout().handle,
         posix.T.IOCGWINSZ,
         @intFromPtr(&ws),
     );
@@ -46,16 +47,16 @@ fn term_size_windows() !TermSize {
 }
 
 pub const TermRenderer = struct {
-    stdout: std.fs.File.Writer,
+    stdout: std.Io.File.Writer,
     buffer: ?[]u8,
 
-    pub fn init(allocator: std.mem.Allocator, buffer_size: ?usize) !*TermRenderer {
-        const render = try allocator.create(TermRenderer);
+    pub fn init(io: std.Io, gpa: std.mem.Allocator, buffer_size: ?usize) !*TermRenderer {
+        const render = try gpa.create(TermRenderer);
         render.buffer = if (buffer_size) |size|
-            try allocator.alloc(u8, size)
+            try gpa.alloc(u8, size)
         else
             null;
-        render.stdout = std.fs.File.stdout().writer(render.buffer orelse &.{});
+        render.stdout = std.Io.File.stdout().writer(io, render.buffer orelse &.{});
         return render;
     }
 

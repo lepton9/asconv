@@ -61,10 +61,7 @@ fn handle_exec_error(gpa: std.mem.Allocator, err: result.ErrorWrap) u8 {
     return 1;
 }
 
-pub fn main() !u8 {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-
+pub fn main(init: std.process.Init) !u8 {
     const cli_spec = comptime zcli.CliApp{
         .config = .{
             .name = exec.build_options.PROGRAM_NAME,
@@ -78,10 +75,14 @@ pub fn main() !u8 {
         .positionals = &exec.positionals,
     };
 
-    const cli: *zcli.Cli = try zcli.parseArgs(allocator, &cli_spec);
-    defer cli.deinit(allocator);
+    const gpa = init.gpa;
+    const io = init.io;
+    const env = init.environ_map;
 
-    const err = try exec.cmd_func(allocator, cli, &cli_spec);
-    if (err) |e| return handle_exec_error(allocator, e);
+    const cli: *zcli.Cli = try zcli.parseInit(init, &cli_spec);
+    defer cli.deinit(gpa);
+
+    const err = try exec.cmd_func(io, gpa, env, cli, &cli_spec);
+    if (err) |e| return handle_exec_error(gpa, e);
     return 0;
 }

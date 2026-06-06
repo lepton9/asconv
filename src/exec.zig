@@ -46,10 +46,10 @@ fn get_input_result(
 ) result.Result([]const u8, ErrorWrap) {
     const result_type: type = result.Result([]const u8, ErrorWrap);
     var input: ?[]const u8 = null;
-    if (cli.find_opt("input")) |opt_input| {
+    if (cli.findOption("input")) |opt_input| {
         input = opt_input.value.?.string;
     }
-    if (cli.find_positional("input")) |pos| {
+    if (cli.findPositional("input")) |pos| {
         if (input) |_| return result_type.wrap_err(ErrorWrap.create_ctx(
             gpa,
             ExecError.DuplicateInput,
@@ -64,25 +64,32 @@ fn get_input_result(
 }
 
 fn output_path(cli: *zcli.Cli) ?[]const u8 {
-    const option = cli.find_opt("out");
+    const option = cli.findOption("out");
     if (option) |opt| {
         return opt.value.?.string;
     }
     return null;
 }
 
-fn write_to_file(file_path: []const u8, data: []const u8) !void {
-    var file = try std.fs.cwd().createFile(file_path, .{});
-    defer file.close();
-    try file.writeAll(data);
+fn writeToFile(io: std.Io, file_path: []const u8, data: []const u8) !void {
+    var file = try std.Io.Dir.cwd().createFile(io, file_path, .{});
+    defer file.close(io);
+    try file.writeStreamingAll(io, data);
 }
 
-fn write_to_stdio(data: []const u8) !void {
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-    const stdout = &stdout_writer.interface;
-    try stdout.print("{s}\n", .{data});
+/// Write to stdout with format.
+fn fmtWrite(io: std.Io, comptime fmt: []const u8, args: anytype) !void {
+    var buffer: [1024]u8 = undefined;
+    var writer: std.Io.File.Writer = .init(.stdout(), io, &buffer);
+    const stdout = &writer.interface;
+    try stdout.print(fmt, args);
     try stdout.flush();
+}
+
+/// Write all the data to stdout.
+/// Add newline at the end.
+fn writeEndNl(io: std.Io, bytes: []const u8) !void {
+    return fmtWrite(io, "{s}\n", .{bytes});
 }
 
 fn validate_url(uri: std.Uri) !void {
@@ -99,10 +106,10 @@ fn is_url(input: []const u8) !bool {
     return true;
 }
 
-fn fetch_url_content(allocator: std.mem.Allocator, url: []const u8) ![]const u8 {
-    var client = std.http.Client{ .allocator = allocator };
+fn fetch_url_content(io: std.Io, gpa: std.mem.Allocator, url: []const u8) ![]const u8 {
+    var client = std.http.Client{ .io = io, .allocator = gpa };
     defer client.deinit();
-    var writer = std.Io.Writer.Allocating.init(allocator);
+    var writer = std.Io.Writer.Allocating.init(gpa);
     defer writer.deinit();
 
     const res = try client.fetch(.{
@@ -115,20 +122,24 @@ fn fetch_url_content(allocator: std.mem.Allocator, url: []const u8) ![]const u8 
     return try writer.toOwnedSlice();
 }
 
-fn get_input_image(allocator: std.mem.Allocator, filepath: []const u8) ResultImage {
-    const input_url = is_url(filepath) catch {
+fn get_input_image(
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    file_path: []const u8,
+) ResultImage {
+    const input_url = is_url(file_path) catch {
         return ResultImage.wrap_err(
-            ErrorWrap.create_ctx(allocator, ExecError.InvalidUrl, "{s}", .{filepath}),
+            ErrorWrap.create_ctx(gpa, ExecError.InvalidUrl, "{s}", .{file_path}),
         );
     };
 
     if (input_url) {
-        const content = fetch_url_content(allocator, filepath) catch |err| {
+        const content = fetch_url_content(io, gpa, file_path) catch |err| {
             return ResultImage.wrap_err(
-                ErrorWrap.create_ctx(allocator, err, "{s}", .{filepath}),
+                ErrorWrap.create_ctx(gpa, err, "{s}", .{file_path}),
             );
         };
-        defer allocator.free(content);
+        defer gpa.free(content);
         const raw_image = image.load_image_from_memory(content) catch {
             return ResultImage.wrap_err(
                 ErrorWrap.create(ExecError.FileLoadErrorMem),
@@ -136,67 +147,72 @@ fn get_input_image(allocator: std.mem.Allocator, filepath: []const u8) ResultIma
         };
         return ResultImage.wrap_ok(raw_image);
     } else {
-        const raw_image = image.load_image(filepath, null) catch {
+        const raw_image = image.load_image(file_path, null) catch {
             return ResultImage.wrap_err(
-                ErrorWrap.create_ctx(allocator, ExecError.FileLoadError, "{s}", .{filepath}),
+                ErrorWrap.create_ctx(gpa, ExecError.FileLoadError, "{s}", .{file_path}),
             );
         };
         return ResultImage.wrap_ok(raw_image);
     }
 }
 
-fn size(allocator: std.mem.Allocator, cli: *zcli.Cli) !?ErrorWrap {
-    const res = get_input_result(allocator, cli);
+fn size(io: std.Io, gpa: std.mem.Allocator, cli: *zcli.Cli) !?ErrorWrap {
+    const res = get_input_result(gpa, cli);
     const filename = res.unwrap_try() catch return res.unwrap_err();
-    const img = try Image.init(allocator, 0, 0);
-    img.core = try corelib.Core.init(allocator);
+    const img = try Image.init(io, gpa, 0, 0);
+    img.core = try corelib.Core.init(gpa);
     defer Image.deinit(img);
 
-    const img_result = get_input_image(allocator, filename);
+    const img_result = get_input_image(io, gpa, filename);
     img.set_raw_image(img_result.unwrap_try() catch {
         return img_result.unwrap_err();
     }, filename);
 
     var buffer: [256]u8 = undefined;
-    var buf = try std.ArrayList(u8).initCapacity(allocator, 1024);
-    defer buf.deinit(allocator);
-    try buf.appendSlice(allocator, try std.fmt.bufPrint(&buffer, "Image: {s}\n", .{filename}));
-    try buf.appendSlice(allocator, try std.fmt.bufPrint(
+    var buf = try std.ArrayList(u8).initCapacity(gpa, 1024);
+    defer buf.deinit(gpa);
+    try buf.appendSlice(gpa, try std.fmt.bufPrint(&buffer, "Image: {s}\n", .{filename}));
+    try buf.appendSlice(gpa, try std.fmt.bufPrint(
         &buffer,
         "Size: {d}x{d}\n",
         .{ img.raw_image.width, img.raw_image.height },
     ));
     try buf.appendSlice(
-        allocator,
+        gpa,
         try std.fmt.bufPrint(&buffer, "Channels: {d}\n", .{img.raw_image.nchan}),
     );
-    try write_to_stdio(buf.items);
+    try writeEndNl(io, buf.items);
     return null;
 }
 
-fn playback(allocator: std.mem.Allocator, cli: *zcli.Cli) !?ErrorWrap {
-    const res = get_input_result(allocator, cli);
+fn playback(
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    env: *std.process.Environ.Map,
+    cli: *zcli.Cli,
+) !?ErrorWrap {
+    const res = get_input_result(gpa, cli);
     const input_dir = res.unwrap_try() catch return res.unwrap_err();
-    const cwd = std.fs.cwd();
+    const cwd = std.Io.Dir.cwd();
 
-    const dir = cwd.openDir(input_dir, .{ .iterate = true }) catch {
-        return ErrorWrap.create_ctx(allocator, ExecError.InvalidInput, "{s}", .{input_dir});
+    const dir = cwd.openDir(io, input_dir, .{ .iterate = true }) catch {
+        return ErrorWrap.create_ctx(gpa, ExecError.InvalidInput, "{s}", .{input_dir});
     };
 
-    var core = try corelib.Core.init(allocator);
-    defer core.deinit(allocator);
-    if (try ascii_opts(allocator, cli, core)) |err| {
+    var core = try corelib.Core.init(gpa);
+    defer core.deinit(gpa);
+    if (try ascii_opts(io, gpa, env, cli, core)) |err| {
         return err;
     }
 
     var frame_n: usize = 0;
-    const render = try term.TermRenderer.init(allocator, 4096);
-    defer render.deinit(allocator);
+    const render = try term.TermRenderer.init(io, gpa, 4096);
+    defer render.deinit(gpa);
 
-    var input_handler = try Input.init(allocator, true);
+    var input_handler = try Input.init(io, gpa, true);
     defer input_handler.deinit();
     const input_thread = try std.Thread.spawn(
-        .{ .allocator = allocator },
+        .{ .allocator = gpa },
         Input.run,
         .{input_handler},
     );
@@ -206,17 +222,18 @@ fn playback(allocator: std.mem.Allocator, cli: *zcli.Cli) !?ErrorWrap {
 
     var it = dir.iterate();
     var buffer: []u8 = undefined;
-    defer allocator.free(buffer);
+    defer gpa.free(buffer);
 
-    while (it.next() catch null) |entry| {
+    while (it.next(io) catch null) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.startsWith(u8, entry.name, "frame_")) continue;
         buffer = try dir.readFileAlloc(
-            allocator,
+            io,
             entry.name,
-            std.Io.Limit.unlimited.toInt().?,
+            gpa,
+            .unlimited,
         );
-        it.reset();
+        it.reader.reset();
         break;
     }
 
@@ -225,7 +242,7 @@ fn playback(allocator: std.mem.Allocator, cli: *zcli.Cli) !?ErrorWrap {
     defer render.cursor_show();
 
     while (!exit) {
-        while (it.next() catch null) |entry| {
+        while (it.next(io) catch null) |entry| {
             if (input_handler.getKey()) |k| switch (k) {
                 'q', 'Q' => {
                     exit = true;
@@ -237,27 +254,29 @@ fn playback(allocator: std.mem.Allocator, cli: *zcli.Cli) !?ErrorWrap {
             if (entry.kind != .file) continue;
             if (!std.mem.startsWith(u8, entry.name, "frame_")) continue;
 
-            const file_content = try dir.readFile(entry.name, buffer);
+            const file_content = try dir.readFile(io, entry.name, buffer);
             try render.write("\x1b[H");
             try render.writef(file_content);
 
             const ns: u64 = @intFromFloat(
                 @divTrunc(@as(f64, @floatFromInt(1_000_000_000)), @as(f64, fps)),
             );
-            std.Thread.sleep(ns);
+            try std.Io.sleep(io, .fromNanoseconds(ns), .real);
             frame_n += 1;
         }
         if (!core.loop) break;
-        it.reset();
+        it.reader.reset();
     }
 
-    input_handler.endInputDetection();
+    try input_handler.endInputDetection();
     input_thread.detach();
     return null;
 }
 
 fn ascii_video(
-    allocator: std.mem.Allocator,
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    env: *std.process.Environ.Map,
     cli: *zcli.Cli,
     core: *corelib.Core,
     filename: []const u8,
@@ -265,20 +284,20 @@ fn ascii_video(
     if (!enable_video) return ErrorWrap.create(ExecError.VideoBuildOptionNotSet);
     const video = @import("video");
 
-    if (try ascii_opts(allocator, cli, core)) |err| {
+    if (try ascii_opts(io, gpa, env, cli, core)) |err| {
         return err;
     }
-    const progress = (cli.find_opt("progress") != null);
+    const progress = (cli.findOption("progress") != null);
     const output = output_path(cli);
     video.process_video(
-        allocator,
+        gpa,
         core,
         filename,
         output,
         progress,
     ) catch |err| switch (err) {
         video.AVError.FailedOpenInput => return ErrorWrap.create_ctx(
-            allocator,
+            gpa,
             err,
             "{s}",
             .{filename},
@@ -289,19 +308,21 @@ fn ascii_video(
 }
 
 fn ascii_image(
-    allocator: std.mem.Allocator,
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    env: *std.process.Environ.Map,
     cli: *zcli.Cli,
     core: *corelib.Core,
     filename: []const u8,
 ) !?ErrorWrap {
-    var timer_read = try time.Timer.start(&core.stats.read);
-    const img_result = get_input_image(allocator, filename);
-    timer_read.stop();
+    var timer_read = try time.Timer.start(io, &core.stats.read_ms);
+    const img_result = get_input_image(io, gpa, filename);
+    timer_read.stop(io);
     var raw_image = img_result.unwrap_try() catch {
         return img_result.unwrap_err();
     };
 
-    if (try ascii_opts(allocator, cli, core)) |err| {
+    if (try ascii_opts(io, gpa, env, cli, core)) |err| {
         raw_image.deinit();
         return err;
     }
@@ -310,7 +331,7 @@ fn ascii_image(
     var width: usize = @intCast(raw_image.width);
     try core.apply_scale(&width, &height);
 
-    var img = try Image.init(allocator, @intCast(height), @intCast(width));
+    var img = try Image.init(io, gpa, @intCast(height), @intCast(width));
     defer Image.deinit(img);
     img.core = core;
     if (core.edge_detection) try img.set_edge_detection();
@@ -318,65 +339,69 @@ fn ascii_image(
     try img.fit_image();
 
     const data = try img.to_ascii();
-    defer allocator.free(data);
+    defer gpa.free(data);
     const file = output_path(cli);
-    var timer_print = try time.Timer.start(&core.stats.write);
+    var timer_print = try time.Timer.start(io, &core.stats.write_ms);
     if (file) |path| {
-        try write_to_file(path, data);
+        try writeToFile(io, path, data);
     } else {
-        try write_to_stdio(data);
+        try writeEndNl(io, data);
     }
-    timer_print.stop();
+    timer_print.stop(io);
     return null;
 }
 
 fn ascii(
-    allocator: std.mem.Allocator,
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    env: *std.process.Environ.Map,
     cli: *zcli.Cli,
     file_type: corelib.MediaType,
 ) !?ErrorWrap {
-    var core = try corelib.Core.init(allocator);
-    defer core.deinit(allocator);
-    var timer_total = try time.Timer.start(&core.stats.total);
-    const res = get_input_result(allocator, cli);
+    var core = try corelib.Core.init(gpa);
+    defer core.deinit(gpa);
+    var timer_total = try time.Timer.start(io, &core.stats.total_ms);
+    const res = get_input_result(gpa, cli);
     const filename = res.unwrap_try() catch return res.unwrap_err();
 
-    try core.set_ascii_info(allocator, usage.characters);
+    try core.set_ascii_info(gpa, usage.characters);
     switch (file_type) {
         .Video => {
-            if (try ascii_video(allocator, cli, core, filename)) |err| return err;
+            if (try ascii_video(io, gpa, env, cli, core, filename)) |err| return err;
         },
         else => {
-            if (try ascii_image(allocator, cli, core, filename)) |err| return err;
+            if (try ascii_image(io, gpa, env, cli, core, filename)) |err| return err;
         },
     }
-    timer_total.stop();
-    if (cli.find_opt("time")) |_| {
-        try show_performance(allocator, &core.stats, file_type);
+    timer_total.stop(io);
+    if (cli.findOption("time")) |_| {
+        try show_performance(io, gpa, &core.stats, file_type);
     }
     return null;
 }
 
 fn ascii_opts(
-    allocator: std.mem.Allocator,
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    env: *std.process.Environ.Map,
     cli: *zcli.Cli,
     core: *corelib.Core,
 ) !?ErrorWrap {
     const config_path: ?[]const u8 = blk: {
-        if (cli.find_opt("config")) |opt| {
+        if (cli.findOption("config")) |opt| {
             break :blk opt.value.?.string;
         }
         break :blk null;
     };
     const conf: ?config.Config = blk: {
         if (config_path) |path| {
-            if (try config.get_config_from_path(allocator, path)) |c| {
+            if (try config.get_config_from_path(io, gpa, path)) |c| {
                 break :blk c;
             }
-            return ErrorWrap.create_ctx(allocator, ExecError.NoConfigFound, "{s}", .{path});
-        } else break :blk try config.get_config(allocator);
+            return ErrorWrap.create_ctx(gpa, ExecError.NoConfigFound, "{s}", .{path});
+        } else break :blk try config.get_config(io, gpa, env);
     };
-    defer if (conf) |c| c.deinit(allocator);
+    defer if (conf) |c| c.deinit(gpa);
     if (cli.args.count() == 0) return null;
 
     var opt_it = cli.args.iterator();
@@ -397,15 +422,15 @@ fn ascii_opts(
         } else if (std.mem.eql(u8, opt.name, "loop")) {
             core.loop = true;
         } else if (std.mem.eql(u8, opt.name, "reverse")) {
-            try core.ascii_info.reverse(allocator);
+            try core.ascii_info.reverse(gpa);
         } else if (std.mem.eql(u8, opt.name, "charset")) {
-            try core.set_ascii_info(allocator, opt.value.?.string);
+            try core.set_ascii_info(gpa, opt.value.?.string);
         } else if (std.mem.eql(u8, opt.name, "color")) {
             core.toggle_color();
             if (opt.value) |val| {
                 const value = val.string;
                 core.set_color_mode(value) catch {
-                    return ErrorWrap.create_ctx(allocator, ExecError.NoColorModeFound, "{s}", .{value});
+                    return ErrorWrap.create_ctx(gpa, ExecError.NoColorModeFound, "{s}", .{value});
                 };
             }
         } else if (std.mem.eql(u8, opt.name, "edges")) {
@@ -413,7 +438,7 @@ fn ascii_opts(
             if (opt.value) |val| {
                 const value = val.string;
                 core.set_edge_alg(value) catch {
-                    return ErrorWrap.create_ctx(allocator, ExecError.NoAlgorithmFound, "{s}", .{value});
+                    return ErrorWrap.create_ctx(gpa, ExecError.NoAlgorithmFound, "{s}", .{value});
                 };
             }
         } else if (std.mem.eql(u8, opt.name, "sigma")) {
@@ -422,19 +447,19 @@ fn ascii_opts(
             if (conf) |c| {
                 const charsets = c.table.get_table().get("charsets");
                 if (charsets == null or charsets.? != .table)
-                    return ErrorWrap.create_ctx(allocator, ExecError.NoConfigTable, "charsets", .{});
+                    return ErrorWrap.create_ctx(gpa, ExecError.NoConfigTable, "charsets", .{});
                 const cs = charsets.?.get(opt.value.?.string);
                 if (cs == null or cs.? != .string)
                     return ErrorWrap.create_ctx(
-                        allocator,
+                        gpa,
                         ExecError.NoConfigCharset,
                         "{s}",
                         .{opt.value.?.string},
                     );
-                try core.set_ascii_info(allocator, cs.?.string);
+                try core.set_ascii_info(gpa, cs.?.string);
             } else {
                 return ErrorWrap.create_ctx(
-                    allocator,
+                    gpa,
                     ExecError.NoConfigFound,
                     "{s}",
                     .{config_path orelse "default_path"},
@@ -453,22 +478,22 @@ fn show_stats_image(
     stats: *time.Stats,
 ) !void {
     var line_buf: [256]u8 = undefined;
-    try buffer.appendSlice(allocator, try std.fmt.bufPrint(&line_buf, "Scaling: {d:.3} s\n", .{time.to_s(stats.scaling)}));
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(&line_buf, "Scaling: {d:.3} s\n", .{time.to_s(stats.scaling_ms)}));
     try buffer.appendSlice(
         allocator,
-        try std.fmt.bufPrint(&line_buf, "Edge detecting: {d:.3} s\n", .{time.to_s(stats.edge_detect)}),
+        try std.fmt.bufPrint(&line_buf, "Edge detecting: {d:.3} s\n", .{time.to_s(stats.edge_detect_ms)}),
     );
     try buffer.appendSlice(
         allocator,
-        try std.fmt.bufPrint(&line_buf, "Converting: {d:.3} s\n", .{time.to_s(stats.converting)}),
+        try std.fmt.bufPrint(&line_buf, "Converting: {d:.3} s\n", .{time.to_s(stats.converting_ms)}),
     );
     try buffer.appendSlice(
         allocator,
-        try std.fmt.bufPrint(&line_buf, "Read: {d:.3} s\n", .{time.to_s(stats.read)}),
+        try std.fmt.bufPrint(&line_buf, "Read: {d:.3} s\n", .{time.to_s(stats.read_ms)}),
     );
     try buffer.appendSlice(
         allocator,
-        try std.fmt.bufPrint(&line_buf, "Write: {d:.3} s\n", .{time.to_s(stats.write)}),
+        try std.fmt.bufPrint(&line_buf, "Write: {d:.3} s\n", .{time.to_s(stats.write_ms)}),
     );
 }
 
@@ -482,27 +507,27 @@ fn show_stats_video(
     try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Scaling: {d:.3} s/f\n",
-        .{time.to_s(stats.scaling) / frames_float},
+        .{time.to_s(stats.scaling_ms) / frames_float},
     ));
     try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Edge detecting: {d:.3} s/f\n",
-        .{time.to_s(stats.edge_detect) / frames_float},
+        .{time.to_s(stats.edge_detect_ms) / frames_float},
     ));
     try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Converting: {d:.3} s/f\n",
-        .{time.to_s(stats.converting) / frames_float},
+        .{time.to_s(stats.converting_ms) / frames_float},
     ));
     try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Read: {d:.3} s/f\n",
-        .{time.to_s(stats.read) / frames_float},
+        .{time.to_s(stats.read_ms) / frames_float},
     ));
     try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Write: {d:.3} s/f\n",
-        .{time.to_s(stats.write) / frames_float},
+        .{time.to_s(stats.write_ms) / frames_float},
     ));
     try buffer.appendSlice(allocator, try std.fmt.bufPrint(&line_buf, "Fps: {d:.1}\n", .{
         frames_float / time.to_s(stats.fps.?),
@@ -516,33 +541,35 @@ fn show_stats_video(
 }
 
 fn show_performance(
-    allocator: std.mem.Allocator,
+    io: std.Io,
+    gpa: std.mem.Allocator,
     stats: *time.Stats,
     file_type: corelib.MediaType,
 ) !void {
     var line_buf: [256]u8 = undefined;
-    var buffer = try std.ArrayList(u8).initCapacity(allocator, 1024);
-    defer buffer.deinit(allocator);
-    try buffer.append(allocator, '\n');
+    var buffer = try std.ArrayList(u8).initCapacity(gpa, 1024);
+    defer buffer.deinit(gpa);
+    try buffer.append(gpa, '\n');
     switch (file_type) {
-        .Video => try show_stats_video(allocator, &buffer, stats),
-        else => try show_stats_image(allocator, &buffer, stats),
+        .Video => try show_stats_video(gpa, &buffer, stats),
+        else => try show_stats_image(gpa, &buffer, stats),
     }
-    try buffer.appendSlice(allocator, try std.fmt.bufPrint(
+    try buffer.appendSlice(gpa, try std.fmt.bufPrint(
         &line_buf,
         "Total time taken: {d:.3} s\n",
-        .{time.to_s(stats.total)},
+        .{time.to_s(stats.total_ms)},
     ));
-    try write_to_stdio(buffer.items);
+    try writeEndNl(io, buffer.items);
 }
 
 fn generate_completion(
+    io: std.Io,
     gpa: std.mem.Allocator,
     cli: *zcli.Cli,
     comptime cli_spec: *const zcli.CliApp,
 ) !?ErrorWrap {
     var buf: [8096]u8 = undefined;
-    const shell = cli.find_positional("shell") orelse
+    const shell = cli.findPositional("shell") orelse
         return ErrorWrap.create(error.NoShellArgument);
     const script = zcli.complete.getCompletion(
         &buf,
@@ -558,31 +585,34 @@ fn generate_completion(
         ),
         else => err,
     };
-    try write_to_stdio(script);
+    try writeEndNl(io, script);
     return null;
 }
 
 pub fn cmd_func(
+    io: std.Io,
     gpa: std.mem.Allocator,
+    env: *std.process.Environ.Map,
     cli: *zcli.Cli,
     comptime cli_spec: *const zcli.CliApp,
 ) !?ErrorWrap {
     if (cli.cmd == null) {
         return ErrorWrap.create(ExecError.NoCommand);
     }
+
     const cmd_name = cli.cmd.?.name;
     if (std.mem.eql(u8, cmd_name, "size")) {
-        return try size(gpa, cli);
+        return try size(io, gpa, cli);
     } else if (std.mem.eql(u8, cmd_name, "ascii")) {
-        return try ascii(gpa, cli, .Image);
+        return try ascii(io, gpa, env, cli, .Image);
     } else if (std.mem.eql(u8, cmd_name, "asciivid")) {
-        return try ascii(gpa, cli, .Video);
+        return try ascii(io, gpa, env, cli, .Video);
     } else if (std.mem.eql(u8, cmd_name, "playback")) {
-        return try playback(gpa, cli);
+        return try playback(io, gpa, env, cli);
     } else if (std.mem.eql(u8, cmd_name, "compress")) {
         return null;
     } else if (std.mem.eql(u8, cmd_name, "gen-completion")) {
-        return try generate_completion(gpa, cli, cli_spec);
+        return try generate_completion(io, gpa, cli, cli_spec);
     }
     return null;
 }

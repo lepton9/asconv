@@ -12,17 +12,20 @@ pub const Image = struct {
     raw_image: *ImageRaw = undefined,
     edges: ?corelib.EdgeData = null,
     core: *corelib.Core = undefined,
-    allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, height: u32, width: u32) !*Image {
-        var img = try allocator.create(Image);
-        img.allocator = allocator;
+    allocator: std.mem.Allocator,
+    io: std.Io,
+
+    pub fn init(io: std.Io, gpa: std.mem.Allocator, height: u32, width: u32) !*Image {
+        var img = try gpa.create(Image);
+        img.io = io;
+        img.allocator = gpa;
         img.height = height;
         img.width = width;
         img.edges = null;
-        img.pixels = try allocator.alloc(u32, height * width);
+        img.pixels = try gpa.alloc(u32, height * width);
         @memset(img.pixels, 0);
-        img.raw_image = try allocator.create(ImageRaw);
+        img.raw_image = try gpa.create(ImageRaw);
         img.raw_image.* = ImageRaw{};
         return img;
     }
@@ -69,7 +72,7 @@ pub const Image = struct {
 
     pub fn fit_image(self: *Image) !void {
         if (self.raw_image.data == null) return error.NoImageData;
-        var timer_scaling = try corelib.time.Timer.start(&self.core.stats.scaling);
+        var timer_scaling = try corelib.time.Timer.start(self.io, &self.core.stats.scaling_ms);
         const pixels: []u32 = try convert_to_pixel_matrix(self.allocator, self.raw_image);
         defer free_pixel_mat(pixels, self.allocator);
         corelib.scale_nearest(
@@ -80,10 +83,10 @@ pub const Image = struct {
             self.width,
             self.height,
         );
-        timer_scaling.stop();
+        timer_scaling.stop(self.io);
         if (self.core.edge_detection) {
-            var timer = try corelib.time.Timer.start(&self.core.stats.edge_detect);
-            defer timer.stop();
+            var timer = try corelib.time.Timer.start(self.io, &self.core.stats.edge_detect_ms);
+            defer timer.stop(self.io);
             try corelib.calc_edges(
                 self.allocator,
                 self.core.*,
@@ -131,8 +134,8 @@ pub const Image = struct {
     }
 
     pub fn to_ascii(self: *Image) ![]const u8 {
-        var timer = try corelib.time.Timer.start(&self.core.stats.converting);
-        defer timer.stop();
+        var timer = try corelib.time.Timer.start(self.io, &self.core.stats.converting_ms);
+        defer timer.stop(self.io);
         var buffer = try std.ArrayList(u8).initCapacity(self.allocator, 1024);
         defer buffer.deinit(self.allocator);
         for (0..self.height) |y| {

@@ -22,12 +22,16 @@ test "sobel" {
         @constCast("--edges=sobel"),
         @constCast(test_image),
     };
-    const cli = try zcli.parseFrom(alloc, &app, &args);
+    const cli = try zcli.parseFrom(alloc, &args, &app);
     defer cli.deinit(alloc);
-    if (try exec.cmd_func(alloc, cli, &app)) |err| {
+    const io = std.testing.io;
+    var env = std.process.Environ.Map.init(alloc);
+    defer env.deinit();
+
+    if (try exec.cmd_func(io, alloc, &env, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
     }
-    try std.fs.cwd().deleteFile(output);
+    try std.Io.Dir.cwd().deleteFile(io, output);
 }
 
 test "dog" {
@@ -42,12 +46,16 @@ test "dog" {
         @constCast("--sigma=1.0"),
         @constCast(test_image),
     };
-    const cli = try zcli.parseFrom(alloc, &app, &args);
+    const cli = try zcli.parseFrom(alloc, &args, &app);
     defer cli.deinit(alloc);
-    if (try exec.cmd_func(alloc, cli, &app)) |err| {
+    const io = std.testing.io;
+    var env = std.process.Environ.Map.init(alloc);
+    defer env.deinit();
+
+    if (try exec.cmd_func(io, alloc, &env, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
     }
-    try std.fs.cwd().deleteFile(output);
+    try std.Io.Dir.cwd().deleteFile(io, output);
 }
 
 test "log" {
@@ -62,12 +70,16 @@ test "log" {
         @constCast("--sigma=1.0"),
         @constCast(test_image),
     };
-    const cli = try zcli.parseFrom(alloc, &app, &args);
+    const cli = try zcli.parseFrom(alloc, &args, &app);
     defer cli.deinit(alloc);
-    if (try exec.cmd_func(alloc, cli, &app)) |err| {
+    const io = std.testing.io;
+    var env = std.process.Environ.Map.init(alloc);
+    defer env.deinit();
+
+    if (try exec.cmd_func(io, alloc, &env, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
     }
-    try std.fs.cwd().deleteFile(output);
+    try std.Io.Dir.cwd().deleteFile(io, output);
 }
 
 test "color" {
@@ -81,12 +93,16 @@ test "color" {
         @constCast("--color=color256"),
         @constCast(test_image),
     };
-    const cli = try zcli.parseFrom(alloc, &app, &args);
+    const cli = try zcli.parseFrom(alloc, &args, &app);
     defer cli.deinit(alloc);
-    if (try exec.cmd_func(alloc, cli, &app)) |err| {
+    const io = std.testing.io;
+    var env = std.process.Environ.Map.init(alloc);
+    defer env.deinit();
+
+    if (try exec.cmd_func(io, alloc, &env, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
     }
-    try std.fs.cwd().deleteFile(output);
+    try std.Io.Dir.cwd().deleteFile(io, output);
 }
 
 test "charset" {
@@ -101,10 +117,14 @@ test "charset" {
         @constCast("--reverse"),
         @constCast(test_image),
     };
-    const cli = try zcli.parseFrom(alloc, &app, &args);
+    const cli = try zcli.parseFrom(alloc, &args, &app);
     defer cli.deinit(alloc);
-    if (try exec.cmd_func(alloc, cli, &app)) |err| {
+    const io = std.testing.io;
+    var env = std.process.Environ.Map.init(alloc);
+    defer env.deinit();
+
+    if (try exec.cmd_func(io, alloc, &env, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
     }
-    try std.fs.cwd().deleteFile(output);
+    try std.Io.Dir.cwd().deleteFile(io, output);
 }

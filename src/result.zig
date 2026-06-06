@@ -16,21 +16,21 @@ pub fn Result(comptime T: type, comptime E: type) type {
         pub fn unwrap_try(self: @This()) !T {
             return switch (self) {
                 .Ok => |v| v,
-                .Err => |_| return ResultError.UnwrapError,
+                .Err => return ResultError.UnwrapError,
             };
         }
 
         pub fn unwrap(self: @This()) T {
             return switch (self) {
                 .Ok => |v| v,
-                .Err => |_| @panic("Tried to unwrap Err"),
+                .Err => @panic("Tried to unwrap Err"),
             };
         }
 
         pub fn unwrap_err(self: @This()) E {
             return switch (self) {
                 .Err => |e| e,
-                .Ok => |_| @panic("Tried to unwrap_err Ok"),
+                .Ok => @panic("Tried to unwrap_err Ok"),
             };
         }
 

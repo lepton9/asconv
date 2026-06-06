@@ -1,7 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const toml = @import("toml");
-const fs = std.fs;
 
 const config_name = "config.toml";
 const appname = "asconv";
@@ -16,29 +15,32 @@ pub const Config = struct {
     }
 };
 
-pub fn get_config_from_path(allocator: std.mem.Allocator, path: []const u8) !?Config {
-    const file: ?fs.File = blk: {
-        break :blk fs.cwd().openFile(path, .{}) catch null;
-    };
+pub fn get_config_from_path(io: std.Io, gpa: std.mem.Allocator, path: []const u8) !?Config {
+    const cwd = std.Io.Dir.cwd();
+    const file: ?std.Io.File = cwd.openFile(io, path, .{}) catch null;
     if (file) |f| {
-        f.close();
-        const parser = try toml.Parser.init(allocator);
+        f.close(io);
+        const parser = try toml.Parser.init(gpa);
         defer parser.deinit();
-        const table: *toml.Toml = try parser.parse_file(path);
+        const table: *toml.Toml = try parser.parse_file(io, path);
         return .{
             .table = table,
-            .path = try allocator.dupe(u8, path),
+            .path = try gpa.dupe(u8, path),
         };
     }
     return null;
 }
 
-pub fn get_config(allocator: std.mem.Allocator) !?Config {
-    if (try find_config(allocator)) |path| {
-        errdefer allocator.free(path);
-        const parser = try toml.Parser.init(allocator);
+pub fn get_config(
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    env: *std.process.Environ.Map,
+) !?Config {
+    if (try find_config(io, gpa, env)) |path| {
+        errdefer gpa.free(path);
+        const parser = try toml.Parser.init(gpa);
         defer parser.deinit();
-        const table: *toml.Toml = try parser.parse_file(path);
+        const table: *toml.Toml = try parser.parse_file(io, path);
         return .{
             .table = table,
             .path = path,
@@ -47,90 +49,98 @@ pub fn get_config(allocator: std.mem.Allocator) !?Config {
     return null;
 }
 
-pub fn find_config(allocator: std.mem.Allocator) !?[]u8 {
+pub fn find_config(
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    env: *std.process.Environ.Map,
+) !?[]u8 {
     const config = switch (builtin.os.tag) {
-        .linux, .freebsd => try find_config_linux(allocator),
-        .windows => try find_config_windows(allocator),
-        .macos => try find_config_macos(allocator),
+        .linux, .freebsd => try find_config_linux(io, gpa, env),
+        .windows => try find_config_windows(io, gpa, env),
+        .macos => try find_config_macos(io, gpa, env),
         else => null,
     };
     if (config) |c| return c;
 
-    const file: fs.File = fs.cwd().openFile(config_name, .{}) catch {
+    const file = std.Io.Dir.cwd().openFile(io, config_name, .{}) catch {
         return null;
     };
-    file.close();
-    return try allocator.dupe(u8, config_name);
+    file.close(io);
+    return try gpa.dupe(u8, config_name);
 }
 
-fn find_config_linux(allocator: std.mem.Allocator) !?[]u8 {
-    if (get_env(allocator, "XDG_CONFIG_HOME")) |xdg| {
-        defer allocator.free(xdg);
-        const path = try fs.path.join(allocator, &.{ xdg, appname, config_name });
-        const file: ?fs.File = blk: {
-            break :blk fs.cwd().openFile(path, .{}) catch {
-                allocator.free(path);
+fn find_config_linux(
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    env: *std.process.Environ.Map,
+) !?[]u8 {
+    if (env.get("XDG_CONFIG_HOME")) |xdg| {
+        const path = try std.fs.path.join(gpa, &.{ xdg, appname, config_name });
+        const file: ?std.Io.File = blk: {
+            break :blk std.Io.Dir.cwd().openFile(io, path, .{}) catch {
+                gpa.free(path);
                 break :blk null;
             };
         };
         if (file) |f| {
-            f.close();
+            f.close(io);
             return path;
         }
     }
 
-    if (get_env(allocator, "HOME")) |home| {
-        defer allocator.free(home);
-        const path = try fs.path.join(
-            allocator,
+    if (env.get("HOME")) |home| {
+        const path = try std.fs.path.join(
+            gpa,
             &.{ home, ".config", appname, config_name },
         );
-        const file: fs.File = fs.cwd().openFile(path, .{}) catch {
-            allocator.free(path);
+        const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch {
+            gpa.free(path);
             return null;
         };
-        file.close();
+        file.close(io);
         return path;
     }
     return null;
 }
 
-fn find_config_windows(allocator: std.mem.Allocator) !?[]u8 {
-    if (get_env(allocator, "APPDATA")) |appdata| {
-        defer allocator.free(appdata);
-        const path = try fs.path.join(
-            allocator,
+fn find_config_windows(
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    env: *std.process.Environ.Map,
+) !?[]u8 {
+    if (env.get("APPDATA")) |appdata| {
+        const path = try std.fs.path.join(
+            gpa,
             &.{ appdata, appname, config_name },
         );
-        const file: fs.File = fs.cwd().openFile(path, .{}) catch {
-            allocator.free(path);
+        const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch {
+            gpa.free(path);
             return null;
         };
-        file.close();
+        file.close(io);
         return path;
     }
     return null;
 }
 
-fn find_config_macos(allocator: std.mem.Allocator) !?[]u8 {
-    if (get_env(allocator, "HOME")) |home| {
-        defer allocator.free(home);
-        const path = try fs.path.join(
-            allocator,
+fn find_config_macos(
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    env: *std.process.Environ.Map,
+) !?[]u8 {
+    if (env.get("HOME")) |home| {
+        const path = try std.fs.path.join(
+            gpa,
             &.{ home, "Library", "Application Support", appname, config_name },
         );
-        const file: fs.File = fs.cwd().openFile(path, .{}) catch {
-            allocator.free(path);
+        const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch {
+            gpa.free(path);
             return null;
         };
-        file.close();
+        file.close(io);
         return path;
     }
     return null;
-}
-
-fn get_env(allocator: std.mem.Allocator, env_var: []const u8) ?[]u8 {
-    return std.process.getEnvVarOwned(allocator, env_var) catch null;
 }
 
 test "find" {

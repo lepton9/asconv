@@ -3,22 +3,24 @@ const builtin = @import("builtin");
 
 pub const Input = struct {
     key_queue: std.ArrayList(u8),
-    stdin: std.fs.File.Reader = undefined,
+    stdin: std.Io.File.Reader = undefined,
     read_buf: [8]u8 = undefined,
     raw_input: bool,
     exit: bool = false,
-    mutex: std.Thread.Mutex,
+    mutex: std.Io.Mutex,
     allocator: std.mem.Allocator,
+    io: std.Io,
 
-    pub fn init(allocator: std.mem.Allocator, raw_input: bool) !*Input {
-        const input = try allocator.create(Input);
+    pub fn init(io: std.Io, gpa: std.mem.Allocator, raw_input: bool) !*Input {
+        const input = try gpa.create(Input);
         input.* = .{
-            .key_queue = try std.ArrayList(u8).initCapacity(allocator, 10),
+            .key_queue = try std.ArrayList(u8).initCapacity(gpa, 10),
             .raw_input = raw_input,
-            .mutex = std.Thread.Mutex{},
-            .allocator = allocator,
+            .mutex = std.Io.Mutex.init,
+            .allocator = gpa,
+            .io = io,
         };
-        input.stdin = std.fs.File.stdin().reader(&input.read_buf);
+        input.stdin = std.Io.File.stdin().reader(io, &input.read_buf);
         return input;
     }
 
@@ -28,9 +30,10 @@ pub const Input = struct {
     }
 
     pub fn run(self: *Input) !void {
-        var stdin = std.fs.File.stdin();
+        var stdin = std.Io.File.stdin();
         // Exit if stdin is not a terminal
-        if (!std.posix.isatty(stdin.handle)) {
+
+        if (!(stdin.isTty(self.io) catch false)) {
             self.exit = true;
             return;
         }
@@ -42,9 +45,9 @@ pub const Input = struct {
         if (self.raw_input) try rawModeOff(&stdin);
     }
 
-    pub fn endInputDetection(self: *Input) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+    pub fn endInputDetection(self: *Input) !void {
+        try self.mutex.lock(self.io);
+        defer self.mutex.unlock(self.io);
         self.exit = true;
     }
 
@@ -53,19 +56,19 @@ pub const Input = struct {
     }
 
     fn handleKeyPress(self: *Input, key: u8) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        try self.mutex.lock(self.io);
+        defer self.mutex.unlock(self.io);
         try self.key_queue.insert(self.allocator, 0, key);
     }
 
     pub fn getKey(self: *Input) ?u8 {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lock(self.io) catch return null;
+        defer self.mutex.unlock(self.io);
         return self.key_queue.pop();
     }
 };
 
-fn rawModeOn(stdin: *const std.fs.File) !void {
+fn rawModeOn(stdin: *const std.Io.File) !void {
     if (builtin.os.tag == .windows) return;
     var term = try std.posix.tcgetattr(stdin.handle);
     term.lflag.ICANON = false;
@@ -73,7 +76,7 @@ fn rawModeOn(stdin: *const std.fs.File) !void {
     try std.posix.tcsetattr(stdin.handle, .NOW, term);
 }
 
-fn rawModeOff(stdin: *const std.fs.File) !void {
+fn rawModeOff(stdin: *const std.Io.File) !void {
     if (builtin.os.tag == .windows) return;
     const term = try std.posix.tcgetattr(stdin.handle);
     try std.posix.tcsetattr(stdin.handle, .NOW, term);

@@ -194,6 +194,10 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_test_cmd.step);
+
+    const check_step = b.step("check", "Check for compile errors");
+    check_step.dependOn(&exe.step);
+    check_step.dependOn(&tests.step);
 }
 
 fn linkFfmpeg(
@@ -209,15 +213,15 @@ fn linkFfmpeg(
                     break :blk std.fmt.allocPrint(b.allocator, "{s}", .{ffmpeg_d}) catch return;
                 } else {
                     const base_dir = "C:/ProgramData/chocolatey/lib/ffmpeg-shared/tools";
-                    var dir = std.fs.openDirAbsolute(base_dir, .{ .iterate = true }) catch |err| {
+                    var dir = std.Io.Dir.openDirAbsolute(b.graph.io, base_dir, .{ .iterate = true }) catch |err| {
                         std.debug.print("Couldn't open ffmpeg base dir {s}: {}\n", .{ base_dir, err });
                         return;
                     };
-                    defer dir.close();
+                    defer dir.close(b.graph.io);
 
                     var found_dir: ?[]const u8 = null;
                     var it = dir.iterate();
-                    while (it.next() catch null) |entry| {
+                    while (it.next(b.graph.io) catch null) |entry| {
                         if (entry.kind == .directory and std.mem.startsWith(u8, entry.name, "ffmpeg")) {
                             found_dir = entry.name;
                             break;
@@ -254,14 +258,14 @@ fn linkFfmpeg(
                     lib.linkSystemLibrary(lib_name, .{});
                 }
 
-                var bin_dir = std.fs.openDirAbsolute(ffmpeg_bin_dir, .{ .iterate = true }) catch |err| {
+                var bin_dir = std.Io.Dir.openDirAbsolute(b.graph.io, ffmpeg_bin_dir, .{ .iterate = true }) catch |err| {
                     std.debug.print("Couldn't open ffmpeg bin dir {s}: {}\n", .{ ffmpeg_bin_dir, err });
                     return;
                 };
-                defer bin_dir.close();
+                defer bin_dir.close(b.graph.io);
 
                 var iter = bin_dir.iterate();
-                while (iter.next() catch null) |entry| {
+                while (iter.next(b.graph.io) catch null) |entry| {
                     if (entry.kind != .file) continue;
                     for (libs) |lib_name| {
                         if (std.mem.startsWith(u8, entry.name, lib_name) and

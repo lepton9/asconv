@@ -1,12 +1,12 @@
 const std = @import("std");
 
 pub const Stats = struct {
-    total: u64 = 0,
-    scaling: u64 = 0,
-    edge_detect: u64 = 0,
-    converting: u64 = 0,
-    read: u64 = 0,
-    write: u64 = 0,
+    total_ms: u64 = 0,
+    scaling_ms: u64 = 0,
+    edge_detect_ms: u64 = 0,
+    converting_ms: u64 = 0,
+    read_ms: u64 = 0,
+    write_ms: u64 = 0,
     fps: ?u64 = null,
     frames_n: ?usize = null,
     dropped_frames: ?usize = null,
@@ -18,37 +18,35 @@ pub const Stats = struct {
 
 pub const Timer = struct {
     value: *u64,
-    timer: std.time.Timer,
+    timer: std.Io.Timestamp,
 
-    pub fn start(value: *u64) !Timer {
+    pub fn start(io: std.Io, value: *u64) !Timer {
         value.* = 0;
-        return start_add(value);
+        return start_add(io, value);
     }
 
-    pub fn start_add(value: *u64) !Timer {
+    pub fn start_add(io: std.Io, value: *u64) !Timer {
         return .{
             .value = value,
-            .timer = try std.time.Timer.start(),
+            .timer = std.Io.Clock.awake.now(io),
         };
     }
 
-    pub fn stop(self: *Timer) void {
-        self.value.* += self.read();
+    pub fn stop(self: *Timer, io: std.Io) void {
+        self.value.* += self.read(io);
     }
 
-    pub fn read(self: *Timer) u64 {
-        return self.timer.read();
+    pub fn read(self: *Timer, io: std.Io) u64 {
+        const elapsed = self.timer.untilNow(io, .awake);
+        return @intCast(elapsed.toMilliseconds());
     }
 
-    pub fn reset(self: *Timer) void {
-        self.timer.reset();
-    }
+    // pub fn reset(self: *Timer) void {
+    //     _ = self;
+    //     // self.timer.reset();
+    // }
 };
 
-pub fn to_ms(ns: u64) f64 {
-    return @as(f64, @floatFromInt(ns)) / 1_000_000.0;
-}
-
-pub fn to_s(ns: u64) f64 {
-    return @as(f64, @floatFromInt(ns)) / 1_000_000_000.0;
+pub fn to_s(ms: u64) f64 {
+    return @as(f64, @floatFromInt(ms)) / 1_000.0;
 }

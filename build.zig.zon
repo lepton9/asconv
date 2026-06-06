@@ -1,17 +1,17 @@
 .{
     .name = .asconv,
-    .version = "0.5.4",
+    .version = "0.5.5",
     .fingerprint = 0xe418a193eb31c225,
-    .minimum_zig_version = "0.15.1",
+    .minimum_zig_version = "0.16.0",
 
     .dependencies = .{
         .toml = .{
-            .url = "git+https://github.com/lepton9/zig-toml#8a9b79dde56ac1fc38960ed9c482efb9ff88a6a8",
-            .hash = "toml-0.3.2-YDcxkrdYAQB8b9k1q_sp51jt2ymgGLmOX_BD4kQi53Eo",
+            .url = "git+https://github.com/lepton9/zig-toml#1c0568cd996635162d98b7d26caaefb8c53acd92",
+            .hash = "toml-0.3.3-YDcxkllWAQD8kH0ET5iYwOWC9iRWiawj1Neoz2uwg9hG",
         },
         .zcli = .{
-            .url = "git+https://github.com/lepton9/zcli#468bd93239c3b75dc7d74729b215c45dc15045b7",
-            .hash = "zcli-0.3.1-Of3s8a03AQDfOik6OQmeyspg8JLzE1t3mqmsXPymNm6t",
+            .url = "git+https://github.com/lepton9/zcli#48b64367744bd6d55f57dba525477deb65b6c02f",
+            .hash = "zcli-0.3.7-Of3s8SCUAQDpF-HvXiimxngF9zWIdAdWaWoTZl_LYFl6",
         },
         .stb = .{
             .url = "git+https://github.com/nothings/stb.git?ref=master#f58f558c120e9b32c217290b80bad1a0729fbb2c",
