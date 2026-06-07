@@ -12,29 +12,6 @@ zig build -Dvideo -Doptimize=ReleaseFast
 
 > Omit the `-Doptimize=ReleaseFast` flag for a debug build.
 
-## Install dependencies
-Required to compile with flag `-Dvideo`
-
-  *Arch*:
-```
-sudo pacman -S ffmpeg
-```
-
-  *Ubuntu/Debian*:
-```
-sudo apt-get install -y ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
-```
-
-  *Windows*:
-```
-choco install -y ffmpeg-shared
-```
-
-  *Mac*:
-```
-brew install ffmpeg coreutils
-```
-
 ## Usage
 ```
 asconv [command] [options]
