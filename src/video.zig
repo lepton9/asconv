@@ -20,14 +20,16 @@ const Render = struct {
     mode: OutputMode = .Realtime,
     output_path: ?[]const u8 = null,
     stdout: *term.TermRenderer,
+    io: std.Io,
 
-    fn init(allocator: std.mem.Allocator, height: usize, width: usize) !*Render {
-        const render = try allocator.create(Render);
-        const stdout = try term.TermRenderer.init(allocator, 4096);
+    fn init(io: std.Io, gpa: std.mem.Allocator, height: usize, width: usize) !*Render {
+        const render = try gpa.create(Render);
+        const stdout = try term.TermRenderer.init(io, gpa, 4096);
         render.* = .{
             .width = width,
             .height = height,
             .stdout = stdout,
+            .io = io,
         };
         return render;
     }
@@ -41,7 +43,7 @@ const Render = struct {
         self.output_path = output;
         if (output) |out| {
             self.mode = .Dump;
-            try std.fs.cwd().makePath(out);
+            try std.Io.Dir.cwd().createDirPath(self.io, out);
         } else {
             self.mode = .Realtime;
             self.stdout.clear_screen();
@@ -91,9 +93,9 @@ const Render = struct {
         const path = try std.fs.path.join(allocator, &.{ self.output_path.?, filename });
         defer allocator.free(path);
 
-        var file = try std.fs.cwd().createFile(path, .{});
-        defer file.close();
-        try file.writeAll(frame);
+        var file = try std.Io.Dir.cwd().createFile(self.io, path, .{});
+        defer file.close(self.io);
+        try file.writeStreamingAll(self.io, frame);
     }
 
     fn print_progress(self: *Render, frame_no: usize) !void {
@@ -125,19 +127,22 @@ pub const Video = struct {
     frame_ascii_buffer: std.ArrayList(u8),
     edges: ?corelib.EdgeData = null,
     exit: bool = false,
-    allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, height: usize, width: usize) !*Video {
-        const video = try allocator.create(Video);
+    gpa: std.mem.Allocator,
+    io: std.Io,
+
+    pub fn init(io: std.Io, gpa: std.mem.Allocator, height: usize, width: usize) !*Video {
+        const video = try gpa.create(Video);
         video.* = .{
-            .allocator = allocator,
+            .io = io,
+            .gpa = gpa,
             .fps = 30,
             .frame_ns = 0,
             .height = height,
             .width = width,
-            .frame = try allocator.alloc(u32, height * width),
+            .frame = try gpa.alloc(u32, height * width),
             .frame_ascii_buffer = try std.ArrayList(u8).initCapacity(
-                allocator,
+                gpa,
                 width * height * 256,
             ),
         };
@@ -146,21 +151,21 @@ pub const Video = struct {
 
     pub fn deinit(self: *Video) void {
         if (self.edges) |edges| {
-            edges.deinit(self.allocator);
+            edges.deinit(self.gpa);
         }
-        self.frame_ascii_buffer.deinit(self.allocator);
-        self.allocator.free(self.frame);
-        self.allocator.destroy(self);
+        self.frame_ascii_buffer.deinit(self.gpa);
+        self.gpa.free(self.frame);
+        self.gpa.destroy(self);
     }
 
     fn set_edge_detection(self: *Video) !void {
         if (self.edges) |edges| {
-            edges.deinit(self.allocator);
+            edges.deinit(self.gpa);
         }
         self.edges = null;
         if (!self.core.edge_detection) return;
         self.edges = try corelib.EdgeData.init(
-            self.allocator,
+            self.gpa,
             @intCast(self.height),
             @intCast(self.width),
         );
@@ -191,33 +196,36 @@ pub const Video = struct {
     ) !void {
         const c: []const u8 = self.get_char(x, y);
         if (self.core.color) switch (self.core.color_mode) {
-            .color256 => try corelib.append_256_color(self.allocator, buffer, c, self.frame[y * self.width + x]),
-            .truecolor => try corelib.append_truecolor(self.allocator, buffer, c, self.frame[y * self.width + x]),
+            .color256 => try corelib.append_256_color(self.gpa, buffer, c, self.frame[y * self.width + x]),
+            .truecolor => try corelib.append_truecolor(self.gpa, buffer, c, self.frame[y * self.width + x]),
         } else {
-            try buffer.appendSlice(self.allocator, c);
-            try buffer.appendSlice(self.allocator, c);
+            try buffer.appendSlice(self.gpa, c);
+            try buffer.appendSlice(self.gpa, c);
         }
     }
 
     fn frame_to_ascii(self: *Video) ![]const u8 {
-        var timer = try corelib.time.Timer.start_add(&self.core.stats.converting);
-        defer timer.stop();
+        var timer = try corelib.time.Timer.start_add(self.io, &self.core.stats.converting_ns);
+        defer timer.stop(self.io);
         self.frame_ascii_buffer.clearRetainingCapacity();
         for (0..self.height) |y| {
             for (0..self.width) |x| {
                 try self.pixel_to_ascii(&self.frame_ascii_buffer, x, y);
             }
-            if (y < self.height - 1) try self.frame_ascii_buffer.append(self.allocator, '\n');
+            if (y < self.height - 1) try self.frame_ascii_buffer.append(self.gpa, '\n');
         }
         return self.frame_ascii_buffer.items;
     }
 
     fn process_frame(video: *Video) !void {
         if (video.core.edge_detection) {
-            var timer = try corelib.time.Timer.start_add(&video.core.stats.edge_detect);
-            defer timer.stop();
+            var timer = try corelib.time.Timer.start_add(
+                video.io,
+                &video.core.stats.edge_detect_ns,
+            );
+            defer timer.stop(video.io);
             try corelib.calc_edges(
-                video.allocator,
+                video.gpa,
                 video.core.*,
                 video.edges.?,
                 video.frame,
@@ -286,7 +294,8 @@ const AvVideo = struct {
 };
 
 pub fn process_video(
-    allocator: std.mem.Allocator,
+    io: std.Io,
+    gpa: std.mem.Allocator,
     core: *corelib.Core,
     path: []const u8,
     output: ?[]const u8,
@@ -301,13 +310,13 @@ pub fn process_video(
 
     try av_video.init_frame(width, height);
 
-    var video = try Video.init(allocator, height, width);
+    var video = try Video.init(io, gpa, height, width);
     defer video.deinit();
     video.core = core;
     try video.set_edge_detection();
 
-    var render = try Render.init(allocator, height, width);
-    defer render.deinit(allocator);
+    var render = try Render.init(io, gpa, height, width);
+    defer render.deinit(gpa);
     try render.set_output(output);
     defer render.cleanup();
 
@@ -319,18 +328,16 @@ pub fn process_video(
     render.show_progress = display_progress;
     core.stats.fps = 0;
 
-    var input_handler = try Input.init(allocator, true);
+    var input_handler = try Input.init(io, gpa, true);
     defer input_handler.deinit();
     const input_thread = try std.Thread.spawn(
-        .{ .allocator = allocator },
+        .{ .allocator = gpa },
         Input.run,
         .{input_handler},
     );
 
     while (!video.exit) {
         try process_frames(
-            allocator,
-            core,
             video,
             &av_video,
             render,
@@ -340,20 +347,18 @@ pub fn process_video(
 
         try av.reset_video(av_video.fmt_ctx, av_video.codec_ctx, av_video.stream_idx);
     }
-    input_handler.endInputDetection();
+    try input_handler.endInputDetection();
     input_thread.detach();
 }
 
 fn process_frames(
-    allocator: std.mem.Allocator,
-    core: *corelib.Core,
     video: *Video,
     av_video: *AvVideo,
     render: *Render,
     input: *Input,
 ) !void {
-    var timer_read = try corelib.time.Timer.start_add(&core.stats.read);
-    var timer_fps = try corelib.time.Timer.start_add(&core.stats.fps.?);
+    var timer_read = try corelib.time.Timer.start_add(video.io, &video.core.stats.read_ns);
+    var timer_fps = try corelib.time.Timer.start_add(video.io, &video.core.stats.fps.?);
     var frame_no: usize = 0;
 
     var packet: av.Packet = undefined;
@@ -370,21 +375,21 @@ fn process_frames(
         if (packet.stream_index == av_video.stream_idx) {
             if (av.send_packet(av_video.codec_ctx, &packet) != 0) continue;
             while (av.receive_frame(av_video.codec_ctx, av_video.frame) == 0) {
-                timer_read.stop();
-                defer timer_read.reset();
-                if (render.mode == .Realtime and core.drop_frames) {
+                timer_read.stop(video.io);
+                defer timer_read.reset(video.io);
+                if (render.mode == .Realtime and video.core.drop_frames) {
                     const target_time = frame_no * video.frame_ns;
-                    const elapsed = timer_fps.read();
+                    const elapsed = timer_fps.read(video.io);
                     if (elapsed > target_time + video.frame_ns) {
                         // More than 1 frame late
                         frame_no += 1;
-                        core.stats.frames_n.? += 1;
-                        core.stats.dropped_frames.? += 1;
+                        video.core.stats.frames_n.? += 1;
+                        video.core.stats.dropped_frames.? += 1;
                         continue;
                     }
                 }
 
-                var timer_scale = try corelib.time.Timer.start_add(&video.core.stats.scaling);
+                var timer_scale = try corelib.time.Timer.start_add(video.io, &video.core.stats.scaling_ns);
                 if (av.sws_scale(
                     av_video.sws,
                     @ptrCast(&av_video.frame.*.data),
@@ -395,30 +400,30 @@ fn process_frames(
                     &av_video.frame_rgba.*.linesize,
                 ) < 0) return error.ScaleError;
                 try compress_frame(av_video.frame_rgba, video.frame);
-                timer_scale.stop();
+                timer_scale.stop(video.io);
 
                 try video.process_frame();
 
                 try render.handle_frame(
-                    allocator,
+                    video.gpa,
                     try video.frame_to_ascii(),
                     frame_no,
                 );
 
-                core.stats.frames_n.? += 1;
+                video.core.stats.frames_n.? += 1;
                 frame_no += 1;
                 if (render.mode == .Dump) continue;
 
                 // Target time for the next frame
                 const next_target_time = frame_no * video.frame_ns;
-                const now = timer_fps.read();
+                const now = timer_fps.read(video.io);
                 if (now < next_target_time) {
-                    std.Thread.sleep(next_target_time - now);
+                    try std.Io.sleep(video.io, .fromNanoseconds(next_target_time - now), .awake);
                 }
             }
         }
     }
-    timer_fps.stop();
+    timer_fps.stop(video.io);
 }
 
 fn compress_frame(frame: *av.Frame, dst: []u32) !void {

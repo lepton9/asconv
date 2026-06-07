@@ -72,7 +72,7 @@ pub const Image = struct {
 
     pub fn fit_image(self: *Image) !void {
         if (self.raw_image.data == null) return error.NoImageData;
-        var timer_scaling = try corelib.time.Timer.start(self.io, &self.core.stats.scaling_ms);
+        var timer_scaling = try corelib.time.Timer.start(self.io, &self.core.stats.scaling_ns);
         const pixels: []u32 = try convert_to_pixel_matrix(self.allocator, self.raw_image);
         defer free_pixel_mat(pixels, self.allocator);
         corelib.scale_nearest(
@@ -85,7 +85,7 @@ pub const Image = struct {
         );
         timer_scaling.stop(self.io);
         if (self.core.edge_detection) {
-            var timer = try corelib.time.Timer.start(self.io, &self.core.stats.edge_detect_ms);
+            var timer = try corelib.time.Timer.start(self.io, &self.core.stats.edge_detect_ns);
             defer timer.stop(self.io);
             try corelib.calc_edges(
                 self.allocator,
@@ -134,7 +134,7 @@ pub const Image = struct {
     }
 
     pub fn to_ascii(self: *Image) ![]const u8 {
-        var timer = try corelib.time.Timer.start(self.io, &self.core.stats.converting_ms);
+        var timer = try corelib.time.Timer.start(self.io, &self.core.stats.converting_ns);
         defer timer.stop(self.io);
         var buffer = try std.ArrayList(u8).initCapacity(self.allocator, 1024);
         defer buffer.deinit(self.allocator);

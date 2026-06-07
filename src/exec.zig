@@ -290,6 +290,7 @@ fn ascii_video(
     const progress = (cli.findOption("progress") != null);
     const output = output_path(cli);
     video.process_video(
+        io,
         gpa,
         core,
         filename,
@@ -315,7 +316,7 @@ fn ascii_image(
     core: *corelib.Core,
     filename: []const u8,
 ) !?ErrorWrap {
-    var timer_read = try time.Timer.start(io, &core.stats.read_ms);
+    var timer_read = try time.Timer.start(io, &core.stats.read_ns);
     const img_result = get_input_image(io, gpa, filename);
     timer_read.stop(io);
     var raw_image = img_result.unwrap_try() catch {
@@ -341,7 +342,7 @@ fn ascii_image(
     const data = try img.to_ascii();
     defer gpa.free(data);
     const file = output_path(cli);
-    var timer_print = try time.Timer.start(io, &core.stats.write_ms);
+    var timer_print = try time.Timer.start(io, &core.stats.write_ns);
     if (file) |path| {
         try writeToFile(io, path, data);
     } else {
@@ -360,7 +361,7 @@ fn ascii(
 ) !?ErrorWrap {
     var core = try corelib.Core.init(gpa);
     defer core.deinit(gpa);
-    var timer_total = try time.Timer.start(io, &core.stats.total_ms);
+    var timer_total = try time.Timer.start(io, &core.stats.total_ns);
     const res = get_input_result(gpa, cli);
     const filename = res.unwrap_try() catch return res.unwrap_err();
 
@@ -478,22 +479,22 @@ fn show_stats_image(
     stats: *time.Stats,
 ) !void {
     var line_buf: [256]u8 = undefined;
-    try buffer.appendSlice(allocator, try std.fmt.bufPrint(&line_buf, "Scaling: {d:.3} s\n", .{time.to_s(stats.scaling_ms)}));
+    try buffer.appendSlice(allocator, try std.fmt.bufPrint(&line_buf, "Scaling: {d:.3} s\n", .{time.to_s(stats.scaling_ns)}));
     try buffer.appendSlice(
         allocator,
-        try std.fmt.bufPrint(&line_buf, "Edge detecting: {d:.3} s\n", .{time.to_s(stats.edge_detect_ms)}),
+        try std.fmt.bufPrint(&line_buf, "Edge detecting: {d:.3} s\n", .{time.to_s(stats.edge_detect_ns)}),
     );
     try buffer.appendSlice(
         allocator,
-        try std.fmt.bufPrint(&line_buf, "Converting: {d:.3} s\n", .{time.to_s(stats.converting_ms)}),
+        try std.fmt.bufPrint(&line_buf, "Converting: {d:.3} s\n", .{time.to_s(stats.converting_ns)}),
     );
     try buffer.appendSlice(
         allocator,
-        try std.fmt.bufPrint(&line_buf, "Read: {d:.3} s\n", .{time.to_s(stats.read_ms)}),
+        try std.fmt.bufPrint(&line_buf, "Read: {d:.3} s\n", .{time.to_s(stats.read_ns)}),
     );
     try buffer.appendSlice(
         allocator,
-        try std.fmt.bufPrint(&line_buf, "Write: {d:.3} s\n", .{time.to_s(stats.write_ms)}),
+        try std.fmt.bufPrint(&line_buf, "Write: {d:.3} s\n", .{time.to_s(stats.write_ns)}),
     );
 }
 
@@ -507,27 +508,27 @@ fn show_stats_video(
     try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Scaling: {d:.3} s/f\n",
-        .{time.to_s(stats.scaling_ms) / frames_float},
+        .{time.to_s(stats.scaling_ns) / frames_float},
     ));
     try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Edge detecting: {d:.3} s/f\n",
-        .{time.to_s(stats.edge_detect_ms) / frames_float},
+        .{time.to_s(stats.edge_detect_ns) / frames_float},
     ));
     try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Converting: {d:.3} s/f\n",
-        .{time.to_s(stats.converting_ms) / frames_float},
+        .{time.to_s(stats.converting_ns) / frames_float},
     ));
     try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Read: {d:.3} s/f\n",
-        .{time.to_s(stats.read_ms) / frames_float},
+        .{time.to_s(stats.read_ns) / frames_float},
     ));
     try buffer.appendSlice(allocator, try std.fmt.bufPrint(
         &line_buf,
         "Write: {d:.3} s/f\n",
-        .{time.to_s(stats.write_ms) / frames_float},
+        .{time.to_s(stats.write_ns) / frames_float},
     ));
     try buffer.appendSlice(allocator, try std.fmt.bufPrint(&line_buf, "Fps: {d:.1}\n", .{
         frames_float / time.to_s(stats.fps.?),
@@ -557,7 +558,7 @@ fn show_performance(
     try buffer.appendSlice(gpa, try std.fmt.bufPrint(
         &line_buf,
         "Total time taken: {d:.3} s\n",
-        .{time.to_s(stats.total_ms)},
+        .{time.to_s(stats.total_ns)},
     ));
     try writeEndNl(io, buffer.items);
 }

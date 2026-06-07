@@ -12,23 +12,27 @@ const app = zcli.CliApp{
 };
 
 test "video" {
-    const alloc = std.testing.allocator;
-    const cwd = std.fs.cwd();
-    try cwd.makePath(output);
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    const cwd = std.Io.Dir.cwd();
+    try cwd.createDirPath(io, output);
+    var env = std.process.Environ.Map.init(gpa);
+    defer env.deinit();
 
-    var args = [_][:0]u8{
-        @constCast("asconv"),
-        @constCast("asciivid"),
-        @constCast("--out"),
-        @constCast(output),
-        @constCast("--scale=0.1"),
-        @constCast("--edges=sobel"),
-        @constCast(test_input),
+    const args: []const [:0]const u8 = &.{
+        "asconv",
+        "asciivid",
+        "--out",
+        output,
+        "--scale=0.1",
+        "--edges=sobel",
+        test_input,
     };
-    const cli = try zcli.parseFrom(alloc, &app, &args);
-    defer cli.deinit(alloc);
-    if (try exec.cmd_func(alloc, cli, &app)) |err| {
+    const cli = try zcli.parseFrom(gpa, args, &app);
+    defer cli.deinit(gpa);
+
+    if (try exec.cmd_func(io, gpa, &env, cli, &app)) |err| {
         std.debug.print("Error: {}\n", .{err.err});
     }
-    try cwd.deleteTree(output);
+    try cwd.deleteTree(io, output);
 }
