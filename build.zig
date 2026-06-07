@@ -162,6 +162,7 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .name = "asconv",
         .root_module = exe_mod,
+        .use_llvm = true, // FIX: temporary fix to compile
     });
 
     b.installArtifact(exe);
@@ -175,6 +176,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .target = target,
         }),
+        .use_llvm = true, // FIX: temporary fix to compile
     });
     tests.root_module.addImport("exec", exec_mod);
     tests.root_module.addImport("zcli", zcli_mod);
