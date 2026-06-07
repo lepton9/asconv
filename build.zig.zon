@@ -1,6 +1,6 @@
 .{
     .name = .asconv,
-    .version = "0.5.5",
+    .version = "0.5.6",
     .fingerprint = 0xe418a193eb31c225,
     .minimum_zig_version = "0.16.0",
 
@@ -16,6 +16,10 @@
         .stb = .{
             .url = "git+https://github.com/nothings/stb.git?ref=master#f58f558c120e9b32c217290b80bad1a0729fbb2c",
             .hash = "N-V-__8AAO8tTgBJoAbyWoWhdnNsGrx_ql6PT0ZLfoz2ms6b",
+        },
+        .ffmpeg = .{
+            .url = "git+https://github.com/allyourcodebase/ffmpeg#b19fbf81f7f861ebde37a4c003b9bdf28f46f641",
+            .hash = "ffmpeg-7.0.1-10-zT7QA5-YCATrmBkKKce0gRkhqZI4STqvmtFagwGnPgiV",
         },
     },
 

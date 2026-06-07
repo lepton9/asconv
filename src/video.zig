@@ -1,14 +1,19 @@
 const std = @import("std");
-const av = @import("av");
 const corelib = @import("core");
 const term = @import("term");
-const Input = @import("input").Input;
+const ffmpeg = @import("ffmpeg");
 
-pub const AVError = av.AVError;
+const Input = @import("input").Input;
 
 pub const OutputMode = enum {
     Realtime,
     Dump,
+};
+
+pub const AVError = error{
+    InputFileNotFound,
+    NoVideoStream,
+    CannotOpenDecoder,
 };
 
 const Render = struct {
@@ -237,21 +242,20 @@ pub const Video = struct {
 };
 
 const AvVideo = struct {
-    fmt_ctx: *av.FormatCtx,
-    codec_ctx: *av.CodecCtx,
-    sws: ?*av.SwsCtx,
-    frame: *av.Frame,
-    frame_rgba: *av.Frame,
+    fmt_ctx: *ffmpeg.FormatContext,
+    codec_ctx: *ffmpeg.Codec.Context,
+    sws: *ffmpeg.sws.Context,
+    frame: *ffmpeg.Frame,
+    frame_rgba: *ffmpeg.Frame,
     stream_idx: usize,
 
     fn open_video(input: []const u8, _: ?[]const u8) !AvVideo {
-        const fmt_ctx: *av.FormatCtx = try av.format_open_input(input, null);
-        const video_stream_idx: usize = try av.get_stream_ind(fmt_ctx);
-        const codec_ctx: *av.CodecCtx = try av.get_decoder(fmt_ctx, video_stream_idx);
+        const fmt_ctx: *ffmpeg.FormatContext = try AvVideo.format_open_input(input, null);
+        const video_stream_idx: usize = try AvVideo.get_stream_ind(fmt_ctx);
 
         return .{
             .fmt_ctx = fmt_ctx,
-            .codec_ctx = codec_ctx,
+            .codec_ctx = try AvVideo.get_decoder(fmt_ctx, video_stream_idx),
             .sws = undefined,
             .frame = undefined,
             .frame_rgba = undefined,
@@ -260,36 +264,84 @@ const AvVideo = struct {
     }
 
     fn init_frame(av_video: *AvVideo, width: usize, height: usize) !void {
-        const frame: *av.Frame = av.frame_alloc();
-        var frame_rgba: *av.Frame = av.frame_alloc();
+        const frame: *ffmpeg.Frame = try ffmpeg.Frame.alloc();
+        var frame_rgba: *ffmpeg.Frame = try ffmpeg.Frame.alloc();
         frame_rgba.width = @intCast(width);
         frame_rgba.height = @intCast(height);
-        frame_rgba.format = av.PIX_FMT_RGBA;
-        if (av.frame_get_buffer(frame_rgba, 32) < 0) return error.NoFrameBuffer;
+        frame_rgba.format = .{ .pixel = .RGBA };
 
-        const sws = av.sws_get_context(
+        const sws = try ffmpeg.sws.Context.get(
             av_video.codec_ctx.width,
             av_video.codec_ctx.height,
             av_video.codec_ctx.pix_fmt,
             frame_rgba.width,
             frame_rgba.height,
-            av.PIX_FMT_RGBA,
-            av.SWS_BILINEAR,
+            .RGBA,
+            .{ .BILINEAR = true },
             null,
             null,
             null,
         );
+
         av_video.frame = frame;
         av_video.frame_rgba = frame_rgba;
         av_video.sws = sws;
     }
 
     fn deinit(av_video: *AvVideo) void {
-        av.frame_free(&av_video.frame);
-        av.frame_free(&av_video.frame_rgba);
-        if (av_video.sws) |ctx| av.sws_free_context(ctx);
-        av.codec_free_context(@ptrCast(&av_video.codec_ctx));
-        av.format_free_context(av_video.fmt_ctx);
+        av_video.frame.free();
+        av_video.frame_rgba.free();
+        ffmpeg.sws.Context.free(av_video.sws);
+        av_video.codec_ctx.free();
+        ffmpeg.FormatContext.free(av_video.fmt_ctx);
+    }
+
+    fn format_open_input(
+        input_name: []const u8,
+        input_fmt: ?*const ffmpeg.InputFormat,
+    ) !*ffmpeg.FormatContext {
+        var fmt_ctx = ffmpeg.FormatContext.open_input(
+            @ptrCast(input_name.ptr),
+            input_fmt,
+            null,
+            null,
+        ) catch |err| return switch (err) {
+            error.FileNotFound => AVError.InputFileNotFound,
+            else => err,
+        };
+        try fmt_ctx.find_stream_info(null);
+        return fmt_ctx;
+    }
+
+    fn get_stream_ind(fmt_ctx: *ffmpeg.FormatContext) !usize {
+        // TODO: use ffmpeg.av_find_best_stream()?
+        var video_stream_index: c_int = -1;
+        for (0..fmt_ctx.*.nb_streams) |i| {
+            if (fmt_ctx.*.streams[i].*.codecpar.*.codec_type == .VIDEO) {
+                video_stream_index = @intCast(i);
+                break;
+            }
+        }
+        if (video_stream_index == -1) return AVError.NoVideoStream;
+        return @intCast(video_stream_index);
+    }
+
+    fn get_decoder(
+        fmt_ctx: *ffmpeg.FormatContext,
+        video_stream_index: usize,
+    ) !*ffmpeg.Codec.Context {
+        const codecpar = fmt_ctx.*.streams[@intCast(video_stream_index)].*.codecpar;
+        const codec = try ffmpeg.Codec.find_decoder(codecpar.*.codec_id);
+        const codec_ctx = try ffmpeg.Codec.Context.alloc(codec);
+
+        try codec_ctx.parameters_to_context(codecpar);
+        codec_ctx.open(codec, null) catch return AVError.CannotOpenDecoder;
+        return codec_ctx;
+    }
+
+    pub fn reset_video(self: *AvVideo) !void {
+        try self.fmt_ctx.seek_frame(@intCast(self.stream_idx), 0, 1);
+        self.codec_ctx.flush_buffers();
     }
 };
 
@@ -320,7 +372,7 @@ pub fn process_video(
     try render.set_output(output);
     defer render.cleanup();
 
-    const stream: *av.Stream = av_video.fmt_ctx.*.streams[av_video.stream_idx];
+    const stream: *ffmpeg.Stream = av_video.fmt_ctx.*.streams[av_video.stream_idx];
     const target_fps = core.fps orelse @as(f64, @floatFromInt(stream.*.avg_frame_rate.num)) /
         @as(f64, @floatFromInt(stream.*.avg_frame_rate.den));
     video.set_target_fps(target_fps);
@@ -345,7 +397,7 @@ pub fn process_video(
         );
         if (!core.loop or render.mode == .Dump) break;
 
-        try av.reset_video(av_video.fmt_ctx, av_video.codec_ctx, av_video.stream_idx);
+        try av_video.reset_video();
     }
     try input_handler.endInputDetection();
     input_thread.detach();
@@ -357,14 +409,15 @@ fn process_frames(
     render: *Render,
     input: *Input,
 ) !void {
-    var timer_read = try corelib.time.Timer.start_add(video.io, &video.core.stats.read_ns);
-    var timer_fps = try corelib.time.Timer.start_add(video.io, &video.core.stats.fps.?);
+    var timer_read: corelib.time.Timer = try .start_add(video.io, &video.core.stats.read_ns);
+    var timer_fps: corelib.time.Timer = try .start_add(video.io, &video.core.stats.fps.?);
     var frame_no: usize = 0;
 
-    var packet: av.Packet = undefined;
+    var packet: ffmpeg.Packet = undefined;
 
-    while (av.read_frame(av_video.fmt_ctx, &packet) >= 0) {
-        defer av.packet_unref(&packet);
+    while (true) {
+        av_video.fmt_ctx.read_frame(&packet) catch break;
+        defer packet.unref();
         if (input.getKey()) |k| switch (k) {
             'q', 'Q' => {
                 video.exit = true;
@@ -373,8 +426,9 @@ fn process_frames(
             else => {},
         };
         if (packet.stream_index == av_video.stream_idx) {
-            if (av.send_packet(av_video.codec_ctx, &packet) != 0) continue;
-            while (av.receive_frame(av_video.codec_ctx, av_video.frame) == 0) {
+            av_video.codec_ctx.send_packet(&packet) catch continue;
+            while (true) {
+                av_video.codec_ctx.receive_frame(av_video.frame) catch break;
                 timer_read.stop(video.io);
                 defer timer_read.reset(video.io);
                 if (render.mode == .Realtime and video.core.drop_frames) {
@@ -389,16 +443,13 @@ fn process_frames(
                     }
                 }
 
-                var timer_scale = try corelib.time.Timer.start_add(video.io, &video.core.stats.scaling_ns);
-                if (av.sws_scale(
-                    av_video.sws,
-                    @ptrCast(&av_video.frame.*.data),
-                    @ptrCast(&av_video.frame.*.linesize),
-                    0,
-                    av_video.codec_ctx.height,
-                    &av_video.frame_rgba.*.data,
-                    &av_video.frame_rgba.*.linesize,
-                ) < 0) return error.ScaleError;
+                var timer_scale = try corelib.time.Timer.start_add(
+                    video.io,
+                    &video.core.stats.scaling_ns,
+                );
+
+                try av_video.sws.scale_frame(av_video.frame_rgba, av_video.frame);
+
                 try compress_frame(av_video.frame_rgba, video.frame);
                 timer_scale.stop(video.io);
 
@@ -426,7 +477,7 @@ fn process_frames(
     timer_fps.stop(video.io);
 }
 
-fn compress_frame(frame: *av.Frame, dst: []u32) !void {
+fn compress_frame(frame: *ffmpeg.Frame, dst: []u32) !void {
     const width: usize = @intCast(frame.width);
     const height: usize = @intCast(frame.height);
     const bpp: usize = 4;
@@ -447,7 +498,7 @@ fn compress_frame(frame: *av.Frame, dst: []u32) !void {
     }
 }
 
-fn total_frames(stream: *av.Stream) usize {
+fn total_frames(stream: *ffmpeg.Stream) usize {
     if (stream.nb_frames > 0) {
         return @intCast(stream.nb_frames);
     }

@@ -135,15 +135,12 @@ pub fn build(b: *std.Build) void {
     img_mod.addImport("stb", stb_mod);
 
     // Ffmpeg
-    const av_mod = b.addModule("av", .{
-        .root_source_file = b.path("src/av.zig"),
+    const ffmpeg_dep = b.dependency("ffmpeg", .{
         .target = target,
         .optimize = optimize,
+        .tls = .openssl,
     });
-    video_mod.addImport("av", av_mod);
-    if (enable_video) {
-        linkFfmpeg(b, target, av_mod, ffmpeg_dir);
-    }
+    video_mod.addImport("ffmpeg", ffmpeg_dep.module("av"));
 
     // Toml
     const toml = b.dependency("toml", .{ .target = target, .optimize = optimize });
@@ -200,101 +197,4 @@ pub fn build(b: *std.Build) void {
     const check_step = b.step("check", "Check for compile errors");
     check_step.dependOn(&exe.step);
     check_step.dependOn(&tests.step);
-}
-
-fn linkFfmpeg(
-    b: *std.Build,
-    target: std.Build.ResolvedTarget,
-    lib: *std.Build.Module,
-    ffmpeg_dir: ?[]const u8,
-) void {
-    switch (target.result.os.tag) {
-        .windows => {
-            const ffmpeg_root_maybe: ?[]const u8 = blk: {
-                if (ffmpeg_dir) |ffmpeg_d| {
-                    break :blk std.fmt.allocPrint(b.allocator, "{s}", .{ffmpeg_d}) catch return;
-                } else {
-                    const base_dir = "C:/ProgramData/chocolatey/lib/ffmpeg-shared/tools";
-                    var dir = std.Io.Dir.openDirAbsolute(b.graph.io, base_dir, .{ .iterate = true }) catch |err| {
-                        std.debug.print("Couldn't open ffmpeg base dir {s}: {}\n", .{ base_dir, err });
-                        return;
-                    };
-                    defer dir.close(b.graph.io);
-
-                    var found_dir: ?[]const u8 = null;
-                    var it = dir.iterate();
-                    while (it.next(b.graph.io) catch null) |entry| {
-                        if (entry.kind == .directory and std.mem.startsWith(u8, entry.name, "ffmpeg")) {
-                            found_dir = entry.name;
-                            break;
-                        }
-                    }
-                    if (found_dir) |d|
-                        break :blk std.fmt.allocPrint(b.allocator, "{s}/{s}", .{ base_dir, d }) catch return;
-                    break :blk null;
-                }
-            };
-
-            if (ffmpeg_root_maybe) |ffmpeg_root| {
-                defer b.allocator.free(ffmpeg_root);
-
-                const ffmpeg_lib_dir = std.fs.path.join(b.allocator, &.{ ffmpeg_root, "lib" }) catch return;
-                const ffmpeg_include_dir = std.fs.path.join(b.allocator, &.{ ffmpeg_root, "include" }) catch return;
-                const ffmpeg_bin_dir = std.fs.path.join(b.allocator, &.{ ffmpeg_root, "bin" }) catch return;
-                defer b.allocator.free(ffmpeg_lib_dir);
-                defer b.allocator.free(ffmpeg_include_dir);
-                defer b.allocator.free(ffmpeg_bin_dir);
-
-                lib.addLibraryPath(.{ .cwd_relative = ffmpeg_lib_dir });
-                lib.addIncludePath(.{ .cwd_relative = ffmpeg_include_dir });
-
-                const libs = [_][]const u8{
-                    "avcodec",
-                    "avformat",
-                    "avutil",
-                    "swscale",
-                    "swresample",
-                };
-
-                for (libs) |lib_name| {
-                    lib.linkSystemLibrary(lib_name, .{});
-                }
-
-                var bin_dir = std.Io.Dir.openDirAbsolute(b.graph.io, ffmpeg_bin_dir, .{ .iterate = true }) catch |err| {
-                    std.debug.print("Couldn't open ffmpeg bin dir {s}: {}\n", .{ ffmpeg_bin_dir, err });
-                    return;
-                };
-                defer bin_dir.close(b.graph.io);
-
-                var iter = bin_dir.iterate();
-                while (iter.next(b.graph.io) catch null) |entry| {
-                    if (entry.kind != .file) continue;
-                    for (libs) |lib_name| {
-                        if (std.mem.startsWith(u8, entry.name, lib_name) and
-                            std.mem.endsWith(u8, entry.name, ".dll"))
-                        {
-                            var dll_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-                            const dll_path = std.fmt.bufPrint(
-                                &dll_path_buf,
-                                "{s}/{s}",
-                                .{ ffmpeg_bin_dir, entry.name },
-                            ) catch return;
-                            b.getInstallStep().dependOn(
-                                &b.addInstallBinFile(.{ .cwd_relative = dll_path }, entry.name).step,
-                            );
-                            b.getInstallStep().dependOn(
-                                &b.addInstallFileWithDir(.{ .cwd_relative = dll_path }, .lib, entry.name).step,
-                            );
-                        }
-                    }
-                }
-            }
-        },
-        else => {
-            lib.linkSystemLibrary("libavformat", .{ .use_pkg_config = .force });
-            lib.linkSystemLibrary("libavcodec", .{ .use_pkg_config = .force });
-            lib.linkSystemLibrary("libswscale", .{ .use_pkg_config = .force });
-            lib.linkSystemLibrary("libavutil", .{ .use_pkg_config = .force });
-        },
-    }
 }

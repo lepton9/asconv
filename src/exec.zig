@@ -297,7 +297,7 @@ fn ascii_video(
         output,
         progress,
     ) catch |err| switch (err) {
-        video.AVError.FailedOpenInput => return ErrorWrap.create_ctx(
+        video.AVError.InputFileNotFound => return ErrorWrap.create_ctx(
             gpa,
             err,
             "{s}",
