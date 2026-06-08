@@ -20,6 +20,7 @@
         .ffmpeg = .{
             .url = "git+https://github.com/allyourcodebase/ffmpeg#b19fbf81f7f861ebde37a4c003b9bdf28f46f641",
             .hash = "ffmpeg-7.0.1-10-zT7QA5-YCATrmBkKKce0gRkhqZI4STqvmtFagwGnPgiV",
+            .lazy = true,
         },
     },
 

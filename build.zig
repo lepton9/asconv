@@ -20,13 +20,6 @@ pub fn build(b: *std.Build) void {
     ) orelse false;
     options.addOption(bool, "video", enable_video);
 
-    const ffmpeg_dir = b.option(
-        []const u8,
-        "ffmpeg",
-        "Set path to ffmpeg libraries",
-    );
-    options.addOption(?[]const u8, "ffmpeg", ffmpeg_dir);
-
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -135,12 +128,12 @@ pub fn build(b: *std.Build) void {
     img_mod.addImport("stb", stb_mod);
 
     // Ffmpeg
-    const ffmpeg_dep = b.dependency("ffmpeg", .{
+    const lazy_ffmpeg_dep = if (enable_video) b.lazyDependency("ffmpeg", .{
         .target = target,
         .optimize = optimize,
         .tls = .openssl,
-    });
-    video_mod.addImport("ffmpeg", ffmpeg_dep.module("av"));
+    }) else null;
+    if (lazy_ffmpeg_dep) |dep| video_mod.addImport("ffmpeg", dep.module("av"));
 
     // Toml
     const toml = b.dependency("toml", .{ .target = target, .optimize = optimize });
