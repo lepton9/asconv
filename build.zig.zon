@@ -6,12 +6,12 @@
 
     .dependencies = .{
         .toml = .{
-            .url = "git+https://github.com/lepton9/zig-toml#1c0568cd996635162d98b7d26caaefb8c53acd92",
-            .hash = "toml-0.3.3-YDcxkllWAQD8kH0ET5iYwOWC9iRWiawj1Neoz2uwg9hG",
+            .url = "git+https://github.com/lepton9/zig-toml#0d16c0aa0f3bca4c259800222ad684cd7ad3ffbc",
+            .hash = "toml-0.4.0-YDcxktD2AQC08J5XdQQzPpEdptvg-qrd-V3r16UWGDDv",
         },
         .zcli = .{
-            .url = "git+https://github.com/lepton9/zcli#48b64367744bd6d55f57dba525477deb65b6c02f",
-            .hash = "zcli-0.3.7-Of3s8SCUAQDpF-HvXiimxngF9zWIdAdWaWoTZl_LYFl6",
+            .url = "git+https://github.com/lepton9/zcli#8fa91ca3aea3a8b56d2c65f83bde68b81c05b416",
+            .hash = "zcli-0.3.8-Of3s8YSYAQDn8URV08p6EqUWyQ4XIZTWhw-85WOx4Xa3",
         },
         .stb = .{
             .url = "git+https://github.com/nothings/stb.git?ref=master#f58f558c120e9b32c217290b80bad1a0729fbb2c",

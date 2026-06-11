@@ -136,14 +136,21 @@ pub fn build(b: *std.Build) void {
     if (lazy_ffmpeg_dep) |dep| video_mod.addImport("ffmpeg", dep.module("av"));
 
     // Toml
-    const toml = b.dependency("toml", .{ .target = target, .optimize = optimize });
+    const toml = b.dependency("toml", .{
+        .target = target,
+        .optimize = optimize,
+        .toml_version = "1.1.0",
+    });
     const toml_mod = toml.module("toml");
     config_mod.addImport("toml", toml_mod);
 
     // Zcli
-    const zcli = b.dependency("zcli", .{ .target = target, .optimize = optimize });
+    const zcli = b.dependency("zcli", .{
+        .target = target,
+        .optimize = optimize,
+        .version_tag = zon.version,
+    });
     const zcli_mod = zcli.module("zcli");
-    @import("zcli").addVersionInfo(b, zcli_mod, zon.version);
     exe_mod.addImport("zcli", zcli_mod);
     exec_mod.addImport("zcli", zcli_mod);
     usage_mod.addImport("zcli", zcli_mod);

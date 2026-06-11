@@ -446,7 +446,7 @@ fn ascii_opts(
             core.set_sigma(@floatCast(@max(opt.value.?.float, 0)));
         } else if (std.mem.eql(u8, opt.name, "ccharset")) {
             if (conf) |c| {
-                const charsets = c.table.get_table().get("charsets");
+                const charsets = c.table.getTable().get("charsets");
                 if (charsets == null or charsets.? != .table)
                     return ErrorWrap.create_ctx(gpa, ExecError.NoConfigTable, "charsets", .{});
                 const cs = charsets.?.get(opt.value.?.string);

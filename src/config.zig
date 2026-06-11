@@ -22,7 +22,7 @@ pub fn get_config_from_path(io: std.Io, gpa: std.mem.Allocator, path: []const u8
         f.close(io);
         const parser = try toml.Parser.init(gpa);
         defer parser.deinit();
-        const table: *toml.Toml = try parser.parse_file(io, path);
+        const table: *toml.Toml = try parser.parseFile(io, path);
         return .{
             .table = table,
             .path = try gpa.dupe(u8, path),
@@ -40,7 +40,7 @@ pub fn get_config(
         errdefer gpa.free(path);
         const parser = try toml.Parser.init(gpa);
         defer parser.deinit();
-        const table: *toml.Toml = try parser.parse_file(io, path);
+        const table: *toml.Toml = try parser.parseFile(io, path);
         return .{
             .table = table,
             .path = path,
